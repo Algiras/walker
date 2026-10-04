@@ -64,6 +64,7 @@ export class PickDecider implements Decider {
     if (chosen.value === "auto") {
       command = game.bestCandidate(hintFrom(normalize(text)))?.command ?? null;
       what = `${pct(margin)} game chose ${command ? describeCommand(command) : "nothing"}`;
+      if (!command) return reject("Every pad has a tower and every tower is at the maximum level.", what);
     } else if (chosen.value) {
       command = chosen.value;
       what = `${pct(margin)} ${describeCommand(command)}`;

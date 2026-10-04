@@ -200,6 +200,15 @@ describe("how sure the decider is", () => {
     const r = await new PickDecider("fake", async ({ options }) => options.map(() => NaN)).decide("Charlie please", g);
     expect([r.status, r.command]).toEqual(["reject", null]);
   });
+
+  it("says why when the game has nothing left to build or upgrade", async () => {
+    const full = new Game(generateMap(7));
+    for (const p of full.map.pads) full.addTower(p.name, 3);
+    const auto = async ({ options }: { options: { key: string }[] }) => options.map((o) => (o.key === "defend_auto" ? 0.9 : 0.01));
+    const r = await new PickDecider("fake", auto).decide("we need more defense", full);
+    expect([r.status, r.note]).toEqual(["reject", "Every pad has a tower and every tower is at the maximum level."]);
+    expect(refusalCallout(r.note!)).toBe("Negative. Maximum level.");
+  });
 });
 
 describe("option gate details", () => {

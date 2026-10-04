@@ -49,16 +49,17 @@ export const normalize = (text: string) => cleanTranscript(text).toLowerCase().r
 /** Which kinds of action the player's words point at. "Destroy" means sell for a tower and attack for an enemy. */
 export function intents(text: string): Intent[] {
   const s = cleanTranscript(text).toLowerCase().replace(/[^a-z0-9\s]/g, " ");
-  const words = s.split(/\s+/).filter(Boolean);
-  const aboutTower = STRUCTURE.test(s) || slotNumber(text) !== null || PAD_NAMES.some((n) => mentions(words, n));
+  const aboutTower = () => STRUCTURE.test(s) || slotNumber(text) !== null || padsNamed(text).length > 0;
   const found = (Object.keys(VERBS) as Intent[]).filter((k) => VERBS[k].test(s));
-  if (/\bdestroy\b/.test(s)) found.push(aboutTower ? "sell" : "attack");
+  if (/\bdestroy\b/.test(s)) found.push(aboutTower() ? "sell" : "attack");
   // "Go after enemy 3", "remove enemy 3" and a bare "the second one" mean attack; "build near enemy 3" and "sell the second one" do not.
   const enemy = /\benemy \d+\b/.test(s);
-  const clash = new Set<Intent>(["defend", "hold", "game", "undo", "repeat"]);
-  if (!enemy || aboutTower) clash.add("sell");
-  if (aboutTower) clash.add("move");
-  if ((enemy || ordinalOf(text) !== null) && !found.some((k) => clash.has(k))) found.push("attack");
+  if (enemy || ordinalOf(text) !== null) {
+    const clash = new Set<Intent>(["defend", "hold", "game", "undo", "repeat"]);
+    if (!enemy || aboutTower()) clash.add("sell");
+    if (aboutTower()) clash.add("move");
+    if (!found.some((k) => clash.has(k))) found.push("attack");
+  }
   return [...new Set(found)];
 }
 
