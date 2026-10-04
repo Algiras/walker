@@ -5,9 +5,16 @@ import { SpeechQueue } from "./speech-queue";
 const STORE = "walker.heroVoice";
 const GAIN = 2.2;
 const GAP_MS = 90;
+const HOLD_POLL_MS = 60;
+const MAX_HOLD_MS = 6000;
+const RESUME_WAIT_MS = 300;
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export class HeroVoice {
   enabled = true;
+  /** Lines wait while this is true (the player is talking), so the hero never speaks over a command being given. */
+  holdWhile: () => boolean = () => false;
   private ctx: AudioContext | null = null;
   private out: AudioNode | null = null;
   private files: Promise<{ lines: Record<string, string>; version: string }> | null = null;
@@ -15,12 +22,16 @@ export class HeroVoice {
   private current: AudioBufferSourceNode | null = null;
   private queue = new SpeechQueue(3);
   private pumping = false;
+  private holding = false;
 
   constructor() {
     try {
       this.enabled = localStorage.getItem(STORE) !== "off";
     } catch { /* storage can be blocked */ }
   }
+
+  /** True while a line plays or is about to, which is when the microphone must not listen. */
+  get speaking() { return this.enabled && this.pumping && !this.holding; }
 
   setEnabled(on: boolean) {
     this.enabled = on;
@@ -80,7 +91,7 @@ export class HeroVoice {
 
   /** Lines play one after another and never overlap. priority 2 is a reply to an order; priority 1 is a game event. */
   say(line: string, priority: 1 | 2 = 2) {
-    if (!this.enabled) return;
+    if (!this.enabled || (priority === 1 && this.holdWhile())) return;
     if (!this.ctx) this.unlock();
     if (this.queue.push(line, priority, this.pumping)) void this.pump();
   }
@@ -91,19 +102,51 @@ export class HeroVoice {
     try {
       for (let item = this.queue.next(); item; item = this.queue.next()) {
         const buffer = await this.load(item.line);
-        if (!buffer || !this.ctx || !this.out || !this.enabled) continue;
-        await new Promise<void>((done) => {
-          const src = this.ctx!.createBufferSource();
-          src.buffer = buffer;
-          src.connect(this.out!);
-          src.onended = () => { if (this.current === src) this.current = null; done(); };
-          this.current = src;
-          src.start();
-        });
-        await new Promise((r) => setTimeout(r, GAP_MS));
+        if (!buffer || !this.enabled) continue;
+        await this.waitForPlayer();
+        if (!this.enabled || !(await this.running())) continue;
+        await this.play(buffer);
+        await sleep(GAP_MS);
       }
     } finally {
       this.pumping = false;
     }
+  }
+
+  private async waitForPlayer() {
+    this.holding = true;
+    try {
+      for (let waited = 0; this.enabled && this.holdWhile() && waited < MAX_HOLD_MS; waited += HOLD_POLL_MS) await sleep(HOLD_POLL_MS);
+    } finally {
+      this.holding = false;
+    }
+  }
+
+  /** A suspended context never finishes a line, so a line is only started once it runs; otherwise it would come out late. */
+  private async running() {
+    const ctx = this.ctx;
+    if (!ctx) return false;
+    if (ctx.state !== "running") await Promise.race([ctx.resume().catch(() => {}), sleep(RESUME_WAIT_MS)]);
+    return ctx.state === "running";
+  }
+
+  private play(buffer: AudioBuffer) {
+    return new Promise<void>((done) => {
+      const src = this.ctx!.createBufferSource();
+      src.buffer = buffer;
+      src.connect(this.out!);
+      const end = () => {
+        clearTimeout(guard);
+        if (this.current === src) this.current = null;
+        done();
+      };
+      const guard = setTimeout(() => {
+        try { src.stop(); } catch { /* already stopped */ }
+        end();
+      }, buffer.duration * 1000 + 1000);
+      src.onended = end;
+      this.current = src;
+      src.start();
+    });
   }
 }

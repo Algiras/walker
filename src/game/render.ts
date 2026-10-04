@@ -7,10 +7,28 @@ const C = {
 };
 const ENEMY = { grunt: "#e67e22", fast: "#f1c40f", tank: "#7f3b2b" };
 
+const pixelRatio = () => Math.min(window.devicePixelRatio || 1, 3);
+const calm = typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
+
+let sizedFor = 0;
+
+/** Gives the bitmap the size the canvas is shown at, so the map stays sharp on any screen. Only call it when that size changes. */
+export function sizeCanvas(canvas: HTMLCanvasElement) {
+  sizedFor = pixelRatio();
+  const w = Math.round(canvas.clientWidth * sizedFor), h = Math.round(canvas.clientHeight * sizedFor);
+  if (canvas.width !== w) canvas.width = w;
+  if (canvas.height !== h) canvas.height = h;
+}
+
 export function render(ctx: CanvasRenderingContext2D, g: Game) {
+  if (pixelRatio() !== sizedFor) sizeCanvas(ctx.canvas);
   const { w, h } = g.map;
-  ctx.canvas.width = w * TILE;
-  ctx.canvas.height = h * TILE;
+  const sx = ctx.canvas.width / (w * TILE), sy = ctx.canvas.height / (h * TILE);
+  if (!(sx > 0 && sy > 0)) return;
+  // Labels grow on small screens, where the whole map is drawn far below its natural size.
+  const ui = Math.max(1, 0.7 / (sx / pixelRatio()));
+  ctx.save();
+  ctx.setTransform(sx, 0, 0, sy, 0, 0);
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       ctx.fillStyle = (x + y) % 2 ? C.grass : C.grass2;
@@ -33,7 +51,7 @@ export function render(ctx: CanvasRenderingContext2D, g: Game) {
   marker(ctx, g.map.spawn.x, g.map.spawn.y, C.spawn, "S");
   marker(ctx, g.map.base.x, g.map.base.y, C.base, "B");
 
-  ctx.font = "bold 13px system-ui, sans-serif";
+  ctx.font = `bold ${13 * ui}px system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.lineJoin = "round";
   for (const p of g.map.pads) {
@@ -44,11 +62,11 @@ export function render(ctx: CanvasRenderingContext2D, g: Game) {
     ctx.fillRect(x - TILE * 0.4, y - TILE * 0.4, TILE * 0.8, TILE * 0.8);
     ctx.strokeRect(x - TILE * 0.4, y - TILE * 0.4, TILE * 0.8, TILE * 0.8);
     ctx.strokeStyle = "rgba(0,0,0,.7)";
-    ctx.lineWidth = 3;
-    ctx.strokeText(p.name, x, y + TILE * 0.74);
+    ctx.lineWidth = 3 * ui;
+    ctx.strokeText(p.name, x, y + TILE * 0.74 + (ui - 1) * 12);
     ctx.fillStyle = "#fff";
-    ctx.fillText(p.name, x, y + TILE * 0.74);
-    badge(ctx, x + TILE * 0.3, y - TILE * 0.3, p.number, g.towerAt(p.name) ? "#ffd166" : "#c9ced9");
+    ctx.fillText(p.name, x, y + TILE * 0.74 + (ui - 1) * 12);
+    badge(ctx, x + TILE * 0.3, y - TILE * 0.3, p.number, g.towerAt(p.name) ? "#ffd166" : "#c9ced9", ui);
   }
   for (const t of g.towers) {
     const x = t.pos.x * TILE, y = t.pos.y * TILE;
@@ -68,13 +86,13 @@ export function render(ctx: CanvasRenderingContext2D, g: Game) {
     ctx.fillRect(x - 12, y - 18, 24, 4);
     ctx.fillStyle = "#2ecc71";
     ctx.fillRect(x - 12, y - 18, 24 * Math.max(0, e.hp / e.maxHp), 4);
-    ctx.font = "bold 11px system-ui, sans-serif";
+    ctx.font = `bold ${11 * ui}px system-ui, sans-serif`;
     ctx.textAlign = "center";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 3 * ui;
     ctx.strokeStyle = "rgba(0,0,0,.75)";
-    ctx.strokeText(String(e.num), x, y - 21);
+    ctx.strokeText(String(e.num), x, y - 21 - (ui - 1) * 4);
     ctx.fillStyle = "#fff";
-    ctx.fillText(String(e.num), x, y - 21);
+    ctx.fillText(String(e.num), x, y - 21 - (ui - 1) * 4);
   }
   for (const b of g.beams) {
     ctx.strokeStyle = b.hero ? "#4aa3ff" : "#ffd166";
@@ -84,7 +102,10 @@ export function render(ctx: CanvasRenderingContext2D, g: Game) {
     ctx.lineTo(b.to.x * TILE, b.to.y * TILE);
     ctx.stroke();
   }
-  const shake = g.hero.shake > 0 ? Math.sin(g.hero.shake * 70) * 6 * Math.min(1, g.hero.shake / 0.3) : 0;
+  const shaking = g.hero.shake > 0;
+  const still = !!calm?.matches;
+  const strength = Math.min(1, g.hero.shake / 0.3);
+  const shake = shaking && !still ? Math.sin(g.hero.shake * 70) * 6 * strength : 0;
   const hx = g.hero.pos.x * TILE + shake, hy = g.hero.pos.y * TILE;
   ctx.fillStyle = C.hero;
   ctx.strokeStyle = "#fff";
@@ -94,7 +115,15 @@ export function render(ctx: CanvasRenderingContext2D, g: Game) {
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = "#fff";
+  ctx.font = "bold 13px system-ui, sans-serif";
   ctx.fillText("H", hx, hy + 4);
+  if (shaking && still) {
+    ctx.strokeStyle = `rgba(238, 89, 81, ${strength})`;
+    ctx.beginPath();
+    ctx.arc(hx, hy, 18, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function marker(ctx: CanvasRenderingContext2D, px: number, py: number, color: string, label: string) {
@@ -107,16 +136,16 @@ function marker(ctx: CanvasRenderingContext2D, px: number, py: number, color: st
   ctx.fillText(label, x, y + 6);
 }
 
-function badge(ctx: CanvasRenderingContext2D, x: number, y: number, n: number, fill: string) {
+function badge(ctx: CanvasRenderingContext2D, x: number, y: number, n: number, fill: string, ui: number) {
   ctx.fillStyle = fill;
   ctx.beginPath();
-  ctx.arc(x, y, 10, 0, Math.PI * 2);
+  ctx.arc(x, y, 10 * ui, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = "#3b4a6b";
   ctx.lineWidth = 2;
   ctx.stroke();
-  ctx.fillStyle = "#1b1f2a";
-  ctx.font = "bold 13px system-ui, sans-serif";
+  ctx.fillStyle = C.text;
+  ctx.font = `bold ${13 * ui}px system-ui, sans-serif`;
   ctx.textAlign = "center";
-  ctx.fillText(String(n), x, y + 4.5);
+  ctx.fillText(String(n), x, y + 4.5 * ui);
 }
