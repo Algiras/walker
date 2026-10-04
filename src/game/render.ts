@@ -48,22 +48,12 @@ export function render(ctx: CanvasRenderingContext2D, g: Game) {
     ctx.strokeText(p.name, x, y + TILE * 0.74);
     ctx.fillStyle = "#fff";
     ctx.fillText(p.name, x, y + TILE * 0.74);
+    badge(ctx, x + TILE * 0.3, y - TILE * 0.3, p.number, g.towerAt(p.name) ? "#ffd166" : "#c9ced9");
   }
   for (const t of g.towers) {
     const x = t.pos.x * TILE, y = t.pos.y * TILE;
     ctx.fillStyle = C.tower;
     ctx.fillRect(x - TILE * 0.3, y - TILE * 0.3, TILE * 0.6, TILE * 0.6);
-    ctx.fillStyle = "#ffd166";
-    ctx.beginPath();
-    ctx.arc(x + TILE * 0.3, y - TILE * 0.3, 10, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#3b4a6b";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = "#1b1f2a";
-    ctx.font = "bold 13px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(String(t.id), x + TILE * 0.3, y - TILE * 0.3 + 4.5);
     ctx.fillStyle = "#ffd166";
     for (let i = 0; i < t.level; i++) ctx.fillRect(x - TILE * 0.25 + i * 9, y + TILE * 0.2, 6, 6);
   }
@@ -87,7 +77,8 @@ export function render(ctx: CanvasRenderingContext2D, g: Game) {
     ctx.lineTo(b.to.x * TILE, b.to.y * TILE);
     ctx.stroke();
   }
-  const hx = g.hero.pos.x * TILE, hy = g.hero.pos.y * TILE;
+  const shake = g.hero.shake > 0 ? Math.sin(g.hero.shake * 70) * 6 * Math.min(1, g.hero.shake / 0.3) : 0;
+  const hx = g.hero.pos.x * TILE + shake, hy = g.hero.pos.y * TILE;
   ctx.fillStyle = C.hero;
   ctx.strokeStyle = "#fff";
   ctx.lineWidth = 3;
@@ -107,4 +98,18 @@ function marker(ctx: CanvasRenderingContext2D, px: number, py: number, color: st
   ctx.font = "bold 16px system-ui, sans-serif";
   ctx.textAlign = "center";
   ctx.fillText(label, x, y + 6);
+}
+
+function badge(ctx: CanvasRenderingContext2D, x: number, y: number, n: number, fill: string) {
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  ctx.arc(x, y, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#3b4a6b";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = "#1b1f2a";
+  ctx.font = "bold 13px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(String(n), x, y + 4.5);
 }

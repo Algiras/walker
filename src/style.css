@@ -50,7 +50,11 @@ form { display: flex; gap: 8px; }
 #text { flex: 1; min-width: 0; font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
 .heard { font-size: 15px; margin-top: 10px; }
 .decision { color: var(--muted); font-size: 12.5px; margin: 2px 0 8px; word-break: break-word; }
-.heard:empty, .decision:empty { display: none; }
+.heard:empty, .decision:empty, .advice:empty { display: none; }
+.advice { font-size: 12.5px; margin: 0 0 8px; padding: 4px 8px; border-radius: 6px; background: var(--bg); }
+.advice[data-verdict="good"] { border-left: 3px solid #2e9e5b; }
+.advice[data-verdict="ok"] { border-left: 3px solid var(--muted); }
+.advice[data-verdict="poor"] { border-left: 3px solid var(--warn); }
 table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
 td { padding: 1px 0; } td:last-child { text-align: right; }
 

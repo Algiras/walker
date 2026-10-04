@@ -3,14 +3,19 @@ import { Command, FocusMode, Place } from "./commands";
 import { mulberry32, Rng } from "./rng";
 
 export interface Enemy { id: number; kind: "grunt" | "fast" | "tank"; d: number; hp: number; maxHp: number; speed: number; reward: number }
-export interface Tower { id: number; pad: string; pos: Vec; level: number; cd: number }
+/** A tower's id is the number of the pad slot it stands on, so "tower 3" and pad 3 are the same thing. */
+export interface Tower { id: number; pad: string; pos: Vec; level: number; cd: number; spent: number }
 export interface Beam { from: Vec; to: Vec; ttl: number; hero: boolean }
 type Order =
   | { type: "idle" }
   | { type: "move"; to: Vec; label: string; then?: Command }
   | { type: "attack"; mode: FocusMode; target?: number };
 
-export const COSTS = { build: 50, upgrade: 40 };
+export const COSTS = { build: 50, upgrade: [40, 70], refund: 0.6 };
+export const MAX_LEVEL = COSTS.upgrade.length + 1;
+
+export interface Outcome { ok: boolean; message: string }
+export interface Assessment { verdict: "good" | "ok" | "poor"; note: string }
 
 export interface PadStats {
   name: string;
@@ -22,7 +27,7 @@ export interface PadStats {
 }
 
 export interface Candidate { command: Command; label: string; score: number; affordable: boolean; stats: PadStats }
-export interface Hint { area?: string; near?: "base" | "spawn"; pressure?: boolean }
+export interface Hint { area?: string; near?: "base" | "spawn"; pressure?: boolean; prefer?: "build" | "upgrade" }
 const HERO = { speed: 3.2, range: 2.1, damage: 9, cooldown: 0.45 };
 const TOWER = { range: 2.6, damage: 5, cooldown: 0.7 };
 const ARRIVE = 0.15;
@@ -34,7 +39,7 @@ export class Game {
   enemies: Enemy[] = [];
   towers: Tower[] = [];
   beams: Beam[] = [];
-  hero = { pos: { x: 0, y: 0 } as Vec, cd: 0, order: { type: "idle" } as Order };
+  hero = { pos: { x: 0, y: 0 } as Vec, cd: 0, shake: 0, order: { type: "idle" } as Order };
   gold = 100;
   baseHp = 20;
   wave = 0;
@@ -42,7 +47,6 @@ export class Game {
   log: string[] = [];
   state: "playing" | "lost" = "playing";
   private nextId = 1;
-  private nextTower = 1;
   private spawnQueue: { at: number; kind: Enemy["kind"] }[] = [];
   private waveTimer = 4;
 
@@ -56,12 +60,15 @@ export class Game {
   enemyPos(e: Enemy): Vec { return pointAt(this.map.path, e.d); }
   addTower(pad: string, level = 1): Tower {
     const p = this.padByName(pad)!;
-    const t: Tower = { id: this.nextTower++, pad: p.name, pos: p.pos, level, cd: 0 };
+    const spent = COSTS.build + COSTS.upgrade.slice(0, level - 1).reduce((a, b) => a + b, 0);
+    const t: Tower = { id: p.number, pad: p.name, pos: p.pos, level, cd: 0, spent };
     this.towers.push(t);
     return t;
   }
   towerById(id: number) { return this.towers.find((t) => t.id === id); }
   towerAt(pad: string) { return this.towers.find((t) => t.pad === pad); }
+  upgradeCost(t: Tower): number | null { return t.level >= MAX_LEVEL ? null : COSTS.upgrade[t.level - 1]; }
+  sellValue(t: Tower) { return Math.floor(t.spent * COSTS.refund); }
   padByName(name: string) { return this.map.pads.find((p) => p.name.toLowerCase() === name.toLowerCase()); }
 
   say(msg: string) { this.log.push(msg); if (this.log.length > 50) this.log.shift(); }
@@ -73,45 +80,79 @@ export class Game {
     return pad && { pos: pad.pos, label: pad.name };
   }
 
-  command(c: Command): string {
+  /** Checks a command against the current state without changing anything. Null means it can go ahead. */
+  refusal(c: Command): string | null {
+    switch (c.kind) {
+      case "attack": return this.enemies.length ? null : "There are no enemies to attack.";
+      case "build": {
+        const pad = this.padByName(c.pad);
+        if (!pad) return "No such pad.";
+        if (this.towerAt(pad.name)) return `Pad ${pad.number} ${pad.name} already has a tower.`;
+        return this.gold < COSTS.build ? `Not enough gold: a tower costs ${COSTS.build}, you have ${this.gold}.` : null;
+      }
+      case "upgrade": {
+        const t = this.towerAt(c.pad);
+        if (!t) return `There is no tower at ${c.pad} to upgrade.`;
+        const cost = this.upgradeCost(t);
+        if (cost === null) return `Tower ${t.id} is already at the maximum level.`;
+        return this.gold < cost ? `Not enough gold: upgrading costs ${cost}, you have ${this.gold}.` : null;
+      }
+      case "sell": return this.towerAt(c.pad) ? null : `There is no tower at ${c.pad} to sell.`;
+      default: return null;
+    }
+  }
+
+  command(c: Command): Outcome {
+    const no = this.refusal(c);
+    if (no) {
+      this.hero.shake = 0.6;
+      return { ok: false, message: no };
+    }
+    const ok = (message: string): Outcome => ({ ok: true, message });
     switch (c.kind) {
       case "hold":
         this.hero.order = { type: "idle" };
-        return "Holding position.";
+        return ok("Holding position.");
       case "attack":
         this.hero.order = { type: "attack", mode: c.mode };
-        return `Attacking the ${c.mode} enemy.`;
+        return ok(`Attacking the ${c.mode} enemy.`);
       case "move": {
         const t = this.resolve(c.to);
-        if (!t) return "No such place.";
+        if (!t) return { ok: false, message: "No such place." };
         this.hero.order = { type: "move", to: t.pos, label: t.label };
-        return `Moving to ${t.label}.`;
+        return ok(`Moving to ${t.label}.`);
       }
-      case "build":
-      case "upgrade": {
-        const pad = this.padByName(c.pad);
-        if (!pad) return "No such pad.";
+      default: {
+        const pad = this.padByName(c.pad)!;
         this.hero.order = { type: "move", to: pad.pos, label: pad.name, then: c };
-        return `Heading to ${pad.name} to ${c.kind === "build" ? "build" : "upgrade"}.`;
+        return ok(`Heading to ${pad.name} to ${c.kind}.`);
       }
     }
   }
 
   private finish(c: Command) {
+    const no = this.refusal(c);
+    if (no) {
+      this.hero.shake = 0.6;
+      return this.say(no);
+    }
     if (c.kind === "build") {
-      const pad = this.padByName(c.pad)!;
-      if (this.towerAt(pad.name)) return this.say(`${pad.name} already has a tower.`);
-      if (this.gold < COSTS.build) return this.say(`Need ${COSTS.build} gold to build.`);
       this.gold -= COSTS.build;
-      const t = this.addTower(pad.name);
-      this.say(`Built tower ${t.id} at ${pad.name}.`);
+      const t = this.addTower(c.pad);
+      this.say(`Built tower ${t.id} at ${c.pad}.`);
     } else if (c.kind === "upgrade") {
-      const t = this.towerAt(c.pad);
-      if (!t) return this.say(`No tower at ${c.pad} to upgrade.`);
-      if (this.gold < COSTS.upgrade) return this.say(`Need ${COSTS.upgrade} gold to upgrade.`);
-      this.gold -= COSTS.upgrade;
+      const t = this.towerAt(c.pad)!;
+      const cost = this.upgradeCost(t)!;
+      this.gold -= cost;
+      t.spent += cost;
       t.level++;
       this.say(`Upgraded tower ${t.id} at ${c.pad} to level ${t.level}.`);
+    } else if (c.kind === "sell") {
+      const t = this.towerAt(c.pad)!;
+      const value = this.sellValue(t);
+      this.gold += value;
+      this.towers = this.towers.filter((x) => x !== t);
+      this.say(`Sold tower ${t.id} at ${c.pad} for ${value} gold.`);
     }
   }
 
@@ -176,6 +217,7 @@ export class Game {
       }
     }
 
+    this.hero.shake = Math.max(0, this.hero.shake - dt);
     this.stepHero(dt);
     this.beams = this.beams.filter((b) => (b.ttl -= dt) > 0);
   }
@@ -239,30 +281,47 @@ export class Game {
     });
   }
 
-  /** One legal concrete action per pad (build if empty, upgrade if occupied), with a heuristic score. */
+  /** One option per pad for the defense (build if empty, upgrade if occupied) plus a sell option for each tower. */
   candidates(): Candidate[] {
-    return this.padStats().map((s) => {
+    const out: Candidate[] = [];
+    for (const s of this.padStats()) {
+      const pad = this.padByName(s.name)!;
       const value = s.coverage + 4 * s.threat;
       const pressure = s.threat ? `, ${s.threat} enemies in range now` : "";
       const where = `${s.where}, ${progressWord(s.progress)}${pressure}`;
-      if (s.level === 0) {
-        return { command: { kind: "build", pad: s.name }, label: `build a new tower at pad ${s.name} (${where})`, score: value + 2, affordable: this.gold >= COSTS.build, stats: s };
+      const t = this.towerAt(s.name);
+      if (!t) {
+        out.push({ command: { kind: "build", pad: s.name }, label: `build a new tower at pad ${pad.number} ${s.name} (${where})`, score: value + 2, affordable: this.gold >= COSTS.build, stats: s });
+        continue;
       }
-      return {
+      const cost = this.upgradeCost(t);
+      out.push({
         command: { kind: "upgrade", pad: s.name },
-        label: `upgrade tower ${this.towerAt(s.name)!.id} at pad ${s.name}, level ${s.level} to ${s.level + 1}, make it stronger (${where})`,
-        score: (value * 0.8) / s.level,
-        affordable: this.gold >= COSTS.upgrade,
+        label: `upgrade tower ${t.id} at pad ${s.name}, level ${s.level}${cost === null ? ", already at maximum level" : ` to ${s.level + 1} for ${cost} gold`}, make it stronger (${where})`,
+        score: cost === null ? -1 : (value * 0.8) / s.level,
+        affordable: cost !== null && this.gold >= cost,
         stats: s,
-      };
-    });
+      });
+      out.push({
+        command: { kind: "sell", pad: s.name },
+        label: `sell tower ${t.id} at pad ${s.name}, level ${s.level}, for ${this.sellValue(t)} gold (${where})`,
+        score: -1,
+        affordable: true,
+        stats: s,
+      });
+    }
+    return out;
   }
 
-  /** The game's own pick for "you choose", steered by whatever area or goal the player hinted at. */
+  /** The game's own pick for "you choose", steered by whatever area or goal the player hinted at. It never sells. */
   bestCandidate(hint: Hint = {}): Candidate | undefined {
-    let pool = this.candidates();
+    let pool = this.candidates().filter((c) => c.command.kind !== "sell" && c.score >= 0);
     const ok = pool.filter((c) => c.affordable);
     if (ok.length) pool = ok;
+    if (hint.prefer) {
+      const kind = pool.filter((c) => c.command.kind === hint.prefer);
+      if (kind.length) pool = kind;
+    }
     if (hint.area) {
       const inArea = pool.filter((c) => c.stats.where.includes(hint.area!));
       if (inArea.length) pool = inArea;
@@ -272,10 +331,39 @@ export class Game {
     return pool.reduce<Candidate | undefined>((a, b) => (!a || b.score + bonus(b) > a.score + bonus(a) ? b : a), undefined);
   }
 
+  /** Is this a sensible thing to do right now? Advice only; the player decides. */
+  assess(c: Command): Assessment | null {
+    const stats = this.padStats();
+    const of = (pad: string) => stats.find((s) => s.name === pad)!;
+    if (c.kind === "build") {
+      const s = of(c.pad);
+      const best = Math.max(...stats.filter((x) => x.level === 0).map((x) => x.coverage));
+      if (s.threat > 0) return { verdict: "good", note: `${s.threat} enemies are in range of ${c.pad} right now.` };
+      if (s.coverage < 0.5 * best) return { verdict: "poor", note: `${c.pad} covers only ${s.coverage.toFixed(1)} tiles of path; the best free pad covers ${best.toFixed(1)}.` };
+      return { verdict: "ok", note: `${c.pad} covers ${s.coverage.toFixed(1)} tiles of path.` };
+    }
+    if (c.kind === "upgrade") {
+      const s = of(c.pad);
+      const busiest = Math.max(...stats.map((x) => x.threat));
+      if (s.threat > 0) return { verdict: "good", note: `Tower ${this.towerAt(c.pad)!.id} is shooting at ${s.threat} enemies right now.` };
+      if (busiest > 0) return { verdict: "poor", note: `Tower ${this.towerAt(c.pad)!.id} sees no enemies while another tower sees ${busiest}.` };
+      return { verdict: "ok", note: "No enemies yet, so this is an investment." };
+    }
+    if (c.kind === "sell") {
+      const s = of(c.pad);
+      if (this.towers.length === 1 && this.enemies.length) return { verdict: "poor", note: "That is your only tower and enemies are on the field." };
+      if (s.threat > 0) return { verdict: "poor", note: `Tower ${this.towerAt(c.pad)!.id} is shooting at ${s.threat} enemies right now.` };
+      if (s.coverage < 3) return { verdict: "good", note: `It covers only ${s.coverage.toFixed(1)} tiles of path, so the gold is better spent elsewhere.` };
+      return { verdict: "ok", note: `You get back ${this.sellValue(this.towerAt(c.pad)!)} gold, 60% of what it cost.` };
+    }
+    return null;
+  }
+
   summary(): string {
     const kinds = ["fast", "tank", "grunt"].map((k) => [k, this.enemies.filter((e) => e.kind === k).length] as const).filter(([, n]) => n);
     const enemies = this.enemies.length ? `${this.enemies.length} enemies (${kinds.map(([k, n]) => `${n} ${k}`).join(", ")})` : "no enemies right now";
-    return `Wave ${this.wave}. Gold ${this.gold} (build ${COSTS.build}, upgrade ${COSTS.upgrade}). Base health ${this.baseHp}. ${enemies}. Hero is ${this.orderText()}.`;
+    const towers = this.towers.length ? this.towers.map((t) => `#${t.id} ${t.pad} L${t.level}`).join(", ") : "none";
+    return `Wave ${this.wave}. Gold ${this.gold} (build ${COSTS.build}, upgrade ${COSTS.upgrade.join("/")}). Base health ${this.baseHp}. Towers: ${towers}. ${enemies}. Hero is ${this.orderText()}.`;
   }
 
   orderText(): string {

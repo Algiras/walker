@@ -1,7 +1,7 @@
 import { mulberry32, randInt, shuffle } from "./rng";
 
 export interface Vec { x: number; y: number }
-export interface Pad { name: string; pos: Vec; where: string }
+export interface Pad { name: string; number: number; pos: Vec; where: string }
 export interface GameMap {
   seed: number;
   w: number;
@@ -67,10 +67,13 @@ export function generateMap(seed: number, w = 18, h = 11): GameMap {
   for (const c of shuffle(r, candidates)) {
     if (pads.length >= count) break;
     if (pads.some((p) => Math.abs(p.pos.x - (c.x + 0.5)) + Math.abs(p.pos.y - (c.y + 0.5)) < 3)) continue;
-    pads.push({ name: "", pos: { x: c.x + 0.5, y: c.y + 0.5 }, where: describe(c.x + 0.5, c.y + 0.5, w, h) });
+    pads.push({ name: "", number: 0, pos: { x: c.x + 0.5, y: c.y + 0.5 }, where: describe(c.x + 0.5, c.y + 0.5, w, h) });
   }
   pads.sort((a, b) => a.pos.x - b.pos.x || a.pos.y - b.pos.y);
-  pads.forEach((p, i) => (p.name = PAD_NAMES[i]));
+  pads.forEach((p, i) => {
+    p.name = PAD_NAMES[i];
+    p.number = i + 1;
+  });
 
   const taken = new Set([...pathCells, ...pads.map((p) => cellKey(Math.floor(p.pos.x), Math.floor(p.pos.y)))]);
   const scenery: GameMap["scenery"] = [];

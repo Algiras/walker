@@ -6,6 +6,7 @@ export type Command =
   | { kind: "attack"; mode: FocusMode }
   | { kind: "build"; pad: string }
   | { kind: "upgrade"; pad: string }
+  | { kind: "sell"; pad: string }
   | { kind: "hold" };
 
 export const placeLabel = (p: Place) => (p.type === "pad" ? p.name : p.type);
@@ -16,6 +17,7 @@ export function describeCommand(c: Command): string {
     case "attack": return `attack ${c.mode} enemy`;
     case "build": return `build tower at ${c.pad}`;
     case "upgrade": return `upgrade tower at ${c.pad}`;
+    case "sell": return `sell tower at ${c.pad}`;
     case "hold": return "hold position";
   }
 }

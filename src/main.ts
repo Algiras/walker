@@ -1,7 +1,7 @@
 import { generateMap } from "./game/map";
 import { Game } from "./game/sim";
 import { render } from "./game/render";
-import { describeCommand } from "./game/commands";
+import { Command, describeCommand } from "./game/commands";
 import { Mic } from "./voice/mic";
 import { loadStt, Stt, STT_OPTIONS, SttId } from "./voice/stt";
 import { loadPicker } from "./voice/llm";
@@ -59,13 +59,62 @@ function setTiming(rows: [string, string][]) {
   $("timing").querySelector("tbody")!.innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join("");
 }
 
+const YES = /^\s*(yes|yeah|yep|yup|confirm|do it|sure|ok|okay|correct|right)\b/i;
+const NO = /^\s*(no|nope|cancel|never mind|nevermind|stop that|wrong)\b/i;
+let pending: { command: Command; until: number } | null = null;
+
+function advise(c: Command) {
+  const a = game.assess(c);
+  const el = $("advice");
+  el.textContent = a ? `${{ good: "Good move", ok: "Fine", poor: "Poor move" }[a.verdict]}: ${a.note}` : "";
+  el.dataset.verdict = a?.verdict ?? "";
+}
+
+function run(c: Command) {
+  advise(c);
+  const out = game.command(c);
+  log(out.message);
+  if (!out.ok) $("decision").textContent = out.message;
+  return out;
+}
+
 async function handleText(text: string, t0: number, asrMs?: number) {
   $("heard").textContent = text ? `“${text}”` : "(nothing heard)";
+  $("advice").textContent = "";
   if (!text.trim()) return;
+
+  if (pending && Date.now() < pending.until) {
+    if (YES.test(text)) {
+      const c = pending.command;
+      pending = null;
+      $("decision").textContent = `Confirmed: ${describeCommand(c)}`;
+      run(c);
+      return;
+    }
+    if (NO.test(text)) {
+      pending = null;
+      $("decision").textContent = "Cancelled.";
+      return;
+    }
+  }
+  pending = null;
+
   const d = await decider.decide(text, game);
-  $("decision").textContent = d.command ? `${describeCommand(d.command)}  ·  ${d.trace}` : `Not understood  ·  ${d.trace}`;
-  const reply = d.command ? game.command(d.command) : "Say again?";
-  log(reply);
+  const pct = `${Math.round(d.confidence * 100)}%`;
+  if (d.status === "act" && d.command) {
+    $("decision").textContent = `${describeCommand(d.command)}  ·  ${d.trace}`;
+    run(d.command);
+  } else if (d.status === "confirm" && d.command) {
+    pending = { command: d.command, until: Date.now() + 10_000 };
+    game.hero.shake = 0.35;
+    $("decision").textContent = `${d.note} Did you mean “${describeCommand(d.command)}”? Say yes to confirm.`;
+    log(`Not sure (${pct}): ${describeCommand(d.command)}?`);
+    advise(d.command);
+  } else {
+    game.hero.shake = 0.6;
+    $("decision").textContent = `${d.note ?? "Not understood."}  ·  ${d.trace}`;
+    log(d.note ?? "Not understood.");
+  }
   const rows: [string, string][] = [];
   if (asrMs !== undefined) rows.push(["Speech to text", `${asrMs.toFixed(0)} ms`]);
   rows.push([`Decision (${decider.name})`, `${d.ms.toFixed(0)} ms`]);

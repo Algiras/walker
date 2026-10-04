@@ -37,8 +37,28 @@ The decision step handles named pads, goals and "you choose". Keywords carry the
 | Move the hero | `go to` / `retreat` + a pad, `base` or `spawn` | "go to Charlie" |
 | Focus fire | `attack` + `nearest` / `strongest` / `weakest` / `first` | "attack the strongest one" |
 | Stop | `stop` / `hold` | "stop, hold position" |
+| Sell a tower | `sell` / `scrap` / `demolish` / `destroy` + a pad or number | "sell tower 3" |
 
 For build and upgrade the model sees one legal action per pad (build if empty, upgrade if occupied), each annotated with path coverage, how far along the path it is, enemies in range now and cost, plus an explicit "choose the best spot for me" option that the game resolves with a heuristic.
+
+## Pads, towers and gold
+
+- Every build pad has a number (1, 2, 3, left to right) and a name (Alpha, Bravo, Charlie, in the same order), visible before anything is built. A tower takes its pad's number, so "tower 3", "pad 3" and "Charlie" are the same spot. "Two", "to" and "too" at the end of a phrase are heard as 2.
+- Build costs 50, upgrades cost 40 then 70 (maximum level 3), and selling refunds 60% of everything spent on that tower. Enemies drop gold when they die. "Sell" is never picked by "you choose".
+- If you cannot afford something, the tower is already at maximum level, or there is nothing to sell, the hero shakes and says why. It does not walk off first.
+- Each decision is shown with a short verdict (good, fine, poor) and why, for example selling your only tower while enemies are on the field. It is advice only.
+
+## When the hero is not sure
+
+The confidence is how decisively the best action beats the runner-up (so several near-identical towers sharing the leftover probability do not drag it down).
+
+| Confidence | What happens |
+|---|---|
+| 70% or more | the hero acts |
+| 25% to 70% | the hero shakes and asks "did you mean …? say yes"; "yes" confirms, "no" cancels, it expires after 10 s |
+| under 25% | "I did not catch that" |
+
+Also guarded: saying "build at Charlie" when Charlie already has a tower is refused with a hint, never turned into an upgrade (and the reverse). One action per sentence.
 
 ## How a command flows
 
@@ -55,7 +75,8 @@ Speech to text, one decision, then the action: `(state, text) → new state`. Th
 |---|---|
 | `src/game/` | seeded map generator, simulation, canvas renderer |
 | `src/voice/asr.ts` | Parakeet Redux ONNX pipeline and TDT greedy decoder |
-| `src/voice/tev1.ts`, `llm.ts`, `decide.ts`, `context.ts`, `verbs.ts` | Tev1 runner, the single-pass decider, legal-action list, keyword gate |
+| `src/voice/tev1.ts`, `llm.ts`, `decide.ts`, `context.ts` | Tev1 runner, the single-pass decider, legal-action list |
+| `src/voice/verbs.ts`, `guard.ts`, `fuzzy.ts` | keyword gate (verbs, named pad, area and goal words), transcript fixes such as cell to sell, build/upgrade guard |
 | `src/voice/rules.ts` | keyword fallback before the models load |
 | `src/voice/mic.ts` | capture, push-to-talk and simple energy VAD |
 

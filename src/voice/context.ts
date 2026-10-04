@@ -17,7 +17,8 @@ export function actionOptions(g: Game): Option[] {
   const at = (x: number, y: number) => Math.hypot(g.hero.pos.x - x, g.hero.pos.y - y) < 0.3;
 
   for (const c of g.candidates()) {
-    out.push({ key: `${c.command.kind}_${(c.command as { pad: string }).pad.toLowerCase()}`, text: c.affordable ? c.label : `${c.label} [cannot afford yet]`, value: c.command });
+    const note = c.affordable || c.command.kind === "sell" ? "" : c.label.includes("maximum level") ? "" : " [cannot afford yet]";
+    out.push({ key: `${c.command.kind}_${(c.command as { pad: string }).pad.toLowerCase()}`, text: c.label + note, value: c.command });
   }
   out.push({ key: "defend_auto", text: AUTO, value: "auto" });
 
@@ -29,7 +30,7 @@ export function actionOptions(g: Game): Option[] {
   }
 
   for (const p of g.map.pads) {
-    if (!at(p.pos.x, p.pos.y)) out.push({ key: `move_${p.name.toLowerCase()}`, text: `go to pad ${p.name} (${p.where}), just walk there`, value: { kind: "move", to: { type: "pad", name: p.name } } });
+    if (!at(p.pos.x, p.pos.y)) out.push({ key: `move_${p.name.toLowerCase()}`, text: `go to pad ${p.number} ${p.name} (${p.where}), just walk there`, value: { kind: "move", to: { type: "pad", name: p.name } } });
   }
   if (!at(g.map.base.x, g.map.base.y)) out.push({ key: "move_base", text: "go to the base, just walk there (retreat, go home)", value: { kind: "move", to: { type: "base" } } });
   if (!at(g.map.spawn.x, g.map.spawn.y)) out.push({ key: "move_spawn", text: "go to the spawn, just walk there (where enemies come from)", value: { kind: "move", to: { type: "spawn" } } });
