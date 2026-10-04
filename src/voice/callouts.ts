@@ -49,7 +49,7 @@ export function calloutFor(c: Command, g: Game): string | null {
 /** A refusal in the same voice. */
 export function refusalCallout(message: string): string {
   if (/not enough gold/i.test(message)) return "Insufficient funds.";
-  if (/already has a tower/i.test(message)) return "Negative. Pad occupied.";
+  if (/already has (a )?tower/i.test(message)) return "Negative. Pad occupied.";
   if (/maximum level/i.test(message)) return "Negative. Maximum level.";
   if (/no tower/i.test(message)) return "Negative. No tower there.";
   if (/no enem|only \d+ enemies/i.test(message)) return "Negative. No such target.";

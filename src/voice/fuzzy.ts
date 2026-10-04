@@ -12,5 +12,11 @@ export const closeEnough = (a: string, b: string) => {
   return d <= 2 && d / Math.max(a.length, b.length) <= 0.4;
 };
 
-/** Does the text mention this pad by name, allowing for misheard spellings such as Alfa for Alpha? */
-export const mentions = (words: string[], name: string) => words.some((w) => w === name.toLowerCase() || (w.length > 3 && closeEnough(w, name.toLowerCase())));
+/** Game words within two letters of a pad name: "delete" is not Delta, "home" is not Hotel, "gold" is not Golf. */
+const NOT_PADS = new Set(["delete", "home", "gold"]);
+
+/** Does the text mention this pad by name, allowing for misheard spellings such as Alfa for Alpha, or Fox trot for Foxtrot? */
+export const mentions = (words: string[], name: string) => {
+  const pad = name.toLowerCase();
+  return words.some((w, i) => w === pad || (i > 0 && words[i - 1] + w === pad) || (w.length > 3 && !NOT_PADS.has(w) && closeEnough(w, pad)));
+};

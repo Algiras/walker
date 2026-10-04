@@ -4,13 +4,21 @@ import { mentions } from "./fuzzy";
 
 export type Intent = "move" | "defend" | "attack" | "hold" | "sell" | "game" | "undo" | "repeat";
 
+const BUILD_WORDS = "build|place|construct|put|create";
+const UPGRADE_WORDS = "upgrade|improve|strengthen|reinforce|stronger";
+// The hero's own words (engage, double time, the heavy, the lead target, target 4) are understood when said back.
+const ATTACK_WORDS = "attack|kill|shoot|fight|target|focus|hit|engage|engaging";
+const ENEMY_NOUNS = "enemy|enemies|monster|creep|target";
+export const BUILD = new RegExp(`\\b(${BUILD_WORDS})\\b`);
+export const UPGRADE = new RegExp(`\\b(${UPGRADE_WORDS})\\b`);
+
 export const VERBS: Record<Intent, RegExp> = {
   move: /\b(go|goto|move|walk|head|run|retreat|return|fall back|get back|come|patrol|sweep)\b/,
-  defend: /\b(build|place|construct|put|create|make|add|upgrade|improve|strengthen|reinforce|defend|defense|defence|protect|cover|stronger)\b/,
-  attack: /\b(attack|kill|shoot|fight|target|focus|hit)\b/,
-  hold: /\b(stop(?! (them|it|him|her|those|the))|hold|stay|wait|halt|freeze)\b/,
+  defend: new RegExp(`\\b(${BUILD_WORDS}|${UPGRADE_WORDS}|make|add|defend|defense|defence|protect|cover)\\b`),
+  attack: new RegExp(`\\b(${ATTACK_WORDS})\\b`),
+  hold: /\b(stop(?! (?:them|it|him|her|those|the)\b)|(?:stop|end|quit|cancel|abort) (?:the )?patrol|hold|stay|wait|halt|freeze)\b/,
   sell: /\b(sell|scrap|demolish|dismantle|remove|delete|refund|tear down|take down|knock down|pull down|bulldoze|get rid of)\b/,
-  game: /\b(pause|resume|unpause|continue|faster|speed|slower|slow|normal speed|next wave|call the wave|send the wave|call wave)\b/,
+  game: /\b(pause|resume|unpause|continue|faster|speed|double time|slower|slow|normal speed|next wave|call the wave|send the wave|call wave)\b/,
   undo: /\b(undo|revert|rollback|roll back|take (that|it) back|cancel (that|it|the last)|never ?mind|go back on that|oops)\b/,
   repeat: /\b(again|repeat|redo|same again|one more time)\b/,
 };
@@ -18,17 +26,39 @@ export const VERBS: Record<Intent, RegExp> = {
 /** Words that make a request about a tower or pad, not about an enemy. */
 const STRUCTURE = /\b(tower|towers|pad|slot|number)\b/;
 
+/** Which game control the words ask for. */
+export const GAME_WORDS = {
+  nextwave: /\b(next wave|call (the )?wave|send (the )?wave)\b/,
+  pause: /\bpause\b/,
+  resume: /\b(resume|unpause|continue)\b/,
+  slow: /\b(slower|slow|normal speed)\b/,
+  fast: /\b(faster|speed|double time)\b/,
+};
+
+/** Where the words say to go. */
+export const BASE_WORDS = /\b(base|home|retreat|fall back)\b/;
+export const SPAWN_WORDS = /\b(spawn|entrance|start)\b/;
+
+/** Which enemy the words ask for, besides first and last. */
+export const STRONGEST = /\b(strong|strongest|big|biggest|tank|tough|heavy)\b/;
+export const WEAKEST = /\b(weak|weakest|small|smallest|low)\b/;
+export const NEAREST = /\b(nearest|closest)\b/;
+
 export const normalize = (text: string) => cleanTranscript(text).toLowerCase().replace(/[^a-z\s]/g, " ");
 
 /** Which kinds of action the player's words point at. "Destroy" means sell for a tower and attack for an enemy. */
 export function intents(text: string): Intent[] {
   const s = cleanTranscript(text).toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+  const words = s.split(/\s+/).filter(Boolean);
+  const aboutTower = STRUCTURE.test(s) || slotNumber(text) !== null || PAD_NAMES.some((n) => mentions(words, n));
   const found = (Object.keys(VERBS) as Intent[]).filter((k) => VERBS[k].test(s));
-  if (/\bdestroy\b/.test(s)) {
-    const words = s.split(/\s+/).filter(Boolean);
-    found.push(STRUCTURE.test(s) || slotNumber(text) !== null || PAD_NAMES.some((n) => mentions(words, n)) ? "sell" : "attack");
-  }
-  if (/\benemy \d+\b/.test(s) || ordinalOf(text) !== null) found.push("attack");
+  if (/\bdestroy\b/.test(s)) found.push(aboutTower ? "sell" : "attack");
+  // "Go after enemy 3", "remove enemy 3" and a bare "the second one" mean attack; "build near enemy 3" and "sell the second one" do not.
+  const enemy = /\benemy \d+\b/.test(s);
+  const clash = new Set<Intent>(["defend", "hold", "game", "undo", "repeat"]);
+  if (!enemy || aboutTower) clash.add("sell");
+  if (aboutTower) clash.add("move");
+  if ((enemy || ordinalOf(text) !== null) && !found.some((k) => clash.has(k))) found.push("attack");
   return [...new Set(found)];
 }
 
@@ -62,38 +92,56 @@ function narrowByKeyword(options: Option[], s: string, found: Intent[]): Option[
     const hit = options.filter(pred);
     return hit.length ? hit : options;
   };
-  if (/\bpatrol\b/.test(s)) return only((o) => kind(o)?.kind === "patrol");
+  const attack = (mode: string) => only((o) => { const v = kind(o); return v?.kind === "attack" && v.mode === mode; });
+  if (/\bpatrol\b/.test(s)) return only((o) => kind(o)?.kind === (found.includes("hold") ? "hold" : "patrol"));
   if (found.includes("attack")) {
-    if (/\benemy \d+\b/.test(s)) return only((o) => kind(o)?.kind === "attack" && (kind(o) as { mode: string }).mode === "number");
-    if (ordinalOf(s) !== null) return only((o) => kind(o)?.kind === "attack" && (kind(o) as { mode: string }).mode === "rank");
-    if (/\blast\b/.test(s)) return only((o) => kind(o)?.kind === "attack" && (kind(o) as { mode: string }).mode === "last");
-    if (/\bfirst\b/.test(s)) return only((o) => kind(o)?.kind === "attack" && (kind(o) as { mode: string }).mode === "first");
+    if (/\benemy \d+\b/.test(s)) return attack("number");
+    if (ordinalOf(s) !== null) return attack("rank");
+    // "the weakest one first" is about health, not about the front of the line.
+    if (![STRONGEST, WEAKEST, NEAREST].some((re) => re.test(s))) {
+      if (/\blast\b/.test(s)) return attack("last");
+      if (/\bfirst\b/.test(s)) return attack("first");
+    }
   }
   if (!found.includes("game")) return options;
-  if (/\b(next wave|call (the )?wave|send (the )?wave)\b/.test(s)) return only((o) => kind(o)?.kind === "nextwave");
-  if (/\bpause\b/.test(s)) return only((o) => kind(o)?.kind === "pause");
-  if (/\b(resume|unpause|continue)\b/.test(s)) return only((o) => kind(o)?.kind === "resume");
-  if (/\b(slower|slow|normal speed)\b/.test(s)) return only((o) => { const v = kind(o); return v?.kind === "speed" && !v.fast; });
-  if (/\b(faster|speed)\b/.test(s)) return only((o) => { const v = kind(o); return v?.kind === "speed" && v.fast; });
+  if (GAME_WORDS.nextwave.test(s)) return only((o) => kind(o)?.kind === "nextwave");
+  if (GAME_WORDS.pause.test(s)) return only((o) => kind(o)?.kind === "pause");
+  if (GAME_WORDS.resume.test(s)) return only((o) => kind(o)?.kind === "resume");
+  if (GAME_WORDS.slow.test(s)) return only((o) => { const v = kind(o); return v?.kind === "speed" && !v.fast; });
+  if (GAME_WORDS.fast.test(s)) return only((o) => { const v = kind(o); return v?.kind === "speed" && v.fast; });
   return options;
 }
 
-const BUILD = /\b(build|place|construct|put|create)\b/;
-const UPGRADE = /\b(upgrade|improve|strengthen|reinforce|stronger)\b/;
 export const MAX_OPTIONS = 24;
 
 const padOf = (o: Option) => (o.value && o.value !== "auto" && "pad" in o.value ? o.value.pad : o.value && o.value !== "auto" && o.value.kind === "move" && o.value.to.type === "pad" ? o.value.to.name : null);
+
+/** The pads the text points at, by name (allowing misheard spellings) or by number. They may not exist on this map. */
+export function padsNamed(text: string): string[] {
+  const words = cleanTranscript(text).toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+  const slot = slotNumber(text);
+  const numbered = slot === null ? undefined : PAD_NAMES[slot - 1];
+  return [...PAD_NAMES.filter((n) => mentions(words, n)), ...(numbered ? [numbered] : [])];
+}
+
+/** "Go to the base" while the hero already stands there: no option is left for it, and nothing else may be guessed. */
+function placeIsHere(options: Option[], s: string): boolean {
+  const base = BASE_WORDS.test(s);
+  if (base === SPAWN_WORDS.test(s) || /\bpatrol\b/.test(s)) return false;
+  return !options.some((o) => o.value && o.value !== "auto" && o.value.kind === "move" && o.value.to.type === (base ? "base" : "spawn"));
+}
 
 /**
  * Keyword guard in front of the model, three steps:
  * 1. When the words clearly signal one kind of action only that kind is offered, without "none":
  *    "go to Charlie" can never become "build at Charlie". Mixed or no verbs leave every kind in play.
- * 2. When a pad is named or numbered, options about other pads are dropped.
+ * 2. When a pad is named or numbered, options about other pads are dropped, and so is "you choose".
  * 3. When the player says build (or upgrade) but not both, the other kind is dropped, as long as something is left.
  * The list is finally capped at Tev1's 24 letters.
  */
 export function gateOptions(options: Option[], text: string): Option[] {
   const clean = cleanTranscript(text).toLowerCase();
+  const heard = clean.replace(/[^a-z0-9\s]/g, " ");
   let out = options;
 
   const found = intents(text);
@@ -102,16 +150,13 @@ export function gateOptions(options: Option[], text: string): Option[] {
     if (!out.length) return [];
   }
 
-  out = narrowByKeyword(out, clean.replace(/[^a-z0-9\s]/g, " "), found);
+  out = narrowByKeyword(out, heard, found);
 
-  const words = clean.replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
-  const slot = slotNumber(text);
-  const named = PAD_NAMES.filter((n) => mentions(words, n));
-  const numbered = slot === null ? null : PAD_NAMES[slot - 1];
-  const focus = new Set([...named, ...(numbered ? [numbered] : [])]);
+  const focus = new Set(padsNamed(text));
   if (focus.size) {
     out = out.filter((o) => {
-      const v = o.value && o.value !== "auto" ? o.value : null;
+      if (o.value === "auto") return false;
+      const v = o.value;
       if (v?.kind === "move" && v.to.type !== "pad") return false;
       if (v?.kind === "nudge" || v?.kind === "patrol") return false;
       const p = padOf(o);
@@ -119,6 +164,7 @@ export function gateOptions(options: Option[], text: string): Option[] {
     });
     if (!out.length) return [];
   } else {
+    if (found.length === 1 && found[0] === "move" && placeIsHere(options, heard)) return [];
     const goal = goalOf(text);
     const where = (o: Option) => o.text.slice(o.text.indexOf("(") + 1);
     const structural = (o: Option) => { const v = o.value && o.value !== "auto" ? o.value : null; return v?.kind === "build" || v?.kind === "upgrade" || v?.kind === "sell"; };
@@ -139,9 +185,8 @@ export function gateOptions(options: Option[], text: string): Option[] {
   }
 
   const kinds = (k: string) => out.filter((o) => o.value && o.value !== "auto" && o.value.kind === k);
-  const s = clean.replace(/[^a-z\s]/g, " ");
-  if (BUILD.test(s) && !UPGRADE.test(s) && kinds("build").length) out = out.filter((o) => !(o.value && o.value !== "auto" && o.value.kind === "upgrade"));
-  else if (UPGRADE.test(s) && !BUILD.test(s) && kinds("upgrade").length) out = out.filter((o) => !(o.value && o.value !== "auto" && o.value.kind === "build"));
+  if (BUILD.test(heard) && !UPGRADE.test(heard) && kinds("build").length) out = out.filter((o) => !(o.value && o.value !== "auto" && o.value.kind === "upgrade"));
+  else if (UPGRADE.test(heard) && !BUILD.test(heard) && kinds("upgrade").length) out = out.filter((o) => !(o.value && o.value !== "auto" && o.value.kind === "build"));
 
   return cap(out);
 }
@@ -165,19 +210,21 @@ export function cap(options: Option[], max = MAX_OPTIONS): Option[] {
 
 const WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 const SOUNDS_LIKE: Record<string, number> = { won: 1, to: 2, too: 2, for: 4, fore: 4, ate: 8 };
-const NOUN = "(?:tower|pad|slot|number|no)";
+// "no" only counts as the abbreviation of number when a digit or a full stop follows, so "no one" stays "no one".
+const NO = "no(?=\\.|\\s*#?\\s*\\d)";
+const NOUN = `(?:tower|pad|slot|number|${NO})`;
 
 const COUNT = Object.keys(WORDS).join("|");
 
 /**
- * "tower two", "pad 2" and "number #2" become "tower 2" (a pad slot number); "enemy three" and, when the
- * sentence is about attacking, "number 3" become "enemy 3". Sound-alikes such as to/for are only trusted as the
- * last word after a tower or pad, so "a tower to the left" stays intact.
+ * "tower two", "pad 2" and "number #2" become "tower 2" (a pad slot number); "enemy three", "enemy number 3" and,
+ * when the sentence is about attacking, "number 3" become "enemy 3". Sound-alikes such as to/for are only trusted
+ * as the last word after a tower or pad, so "a tower to the left" stays intact.
  */
 export function spokenNumbers(text: string): string {
-  const aboutEnemies = /\b(attack|kill|shoot|target|fight|focus|hit)\b/i.test(text) && !/\b(tower|pad|slot)\b/i.test(text);
-  let t = text.replace(new RegExp(`\\b(?:enemy|enemies|monster|creep)\\.?\\s*#?\\s*(\\d+|${COUNT})\\b`, "gi"), (_, n: string) => `enemy ${WORDS[n.toLowerCase()] ?? n}`);
-  if (aboutEnemies) t = t.replace(new RegExp(`\\b(?:number|no)\\.?\\s*#?\\s*(\\d+|${COUNT})\\b`, "gi"), (_, n: string) => `enemy ${WORDS[n.toLowerCase()] ?? n}`);
+  const aboutEnemies = VERBS.attack.test(text.toLowerCase()) && !/\b(tower|pad|slot)\b/i.test(text);
+  let t = text.replace(new RegExp(`\\b(?:${ENEMY_NOUNS})\\.?\\s*(?:(?:number|${NO})\\.?\\s*)?#?\\s*(\\d+|${COUNT})\\b`, "gi"), (_, n: string) => `enemy ${WORDS[n.toLowerCase()] ?? n}`);
+  if (aboutEnemies) t = t.replace(new RegExp(`\\b(?:number|${NO})\\.?\\s*#?\\s*(\\d+|${COUNT})\\b`, "gi"), (_, n: string) => `enemy ${WORDS[n.toLowerCase()] ?? n}`);
   return t
     .replace(new RegExp(`\\b${NOUN}\\.?\\s*#?\\s*(\\d+|${COUNT})\\b`, "gi"), (_, n: string) => `tower ${WORDS[n.toLowerCase()] ?? n}`)
     .replace(new RegExp(`\\b${NOUN}\\.?\\s+(${Object.keys(SOUNDS_LIKE).join("|")})\\s*[.!?]?\\s*$`, "i"), (_, n: string) => `tower ${SOUNDS_LIKE[n.toLowerCase()]}`);
@@ -193,7 +240,7 @@ export const enemyNumber = (text: string): number | null => {
 
 /** "the second one", "third enemy": a place in the line from the front. First and last are modes of their own. */
 export const ordinalOf = (text: string): number | null => {
-  const m = text.toLowerCase().match(new RegExp(`\\b(${Object.keys(RANKS).join("|")})\\s+(?:one|enemy|enemies|guy|monster|creep|unit)\\b`));
+  const m = text.toLowerCase().match(new RegExp(`\\b(${Object.keys(RANKS).join("|")})\\s+(?:one|guy|unit|${ENEMY_NOUNS})\\b`));
   return m ? RANKS[m[1]] : null;
 };
 
@@ -202,20 +249,26 @@ export function cleanTranscript(text: string): string {
   return spokenNumbers(text.replace(/\b(cell|sale|sail|sel)\b(?=\s+(?:the\s+)?(?:tower|pad|slot|number|no\b|\d|one|two|three|four|five|six|seven|eight|nine|ten|alpha|alfa|bravo|charlie|charley|delta|echo|foxtrot|golf))/gi, "sell"));
 }
 
-const JOINERS = /\s*(?:[,;]|(?<=[.!?])\s|\band then\b|\bthen\b|\bafter that\b|\bafterwards\b|\band also\b|\balso\b|\band\b)\s*/i;
+const JOINERS = /\s*(?:[,;]|(?<=(?<!\bno)[.!?])\s|\band then\b|\bthen\b|\bafter that\b|\bafterwards\b|\band also\b|\balso\b|\band\b)\s*/i;
 export const MAX_CLAUSES = 4;
 
 /**
  * Splits "go to Charlie and then build at Alpha" into separate commands. A piece without a verb of its own
- * ("build at Alpha and Bravo") is kept with the clause before it, so lists are not torn apart.
+ * ("build at Alpha and Bravo") is kept with the clause before it, so lists are not torn apart. One at the very
+ * start ("Okay, go to Charlie") goes with the clause after it instead of standing alone and failing.
  */
 export function splitCommands(text: string): string[] {
   const parts = text.split(JOINERS).map((p) => p.trim().replace(/[.!?]+$/, "")).filter(Boolean);
   const out: string[] = [];
+  let lead = "";
   for (const part of parts) {
-    if (out.length && intents(part).length === 0) out[out.length - 1] += ` and ${part}`;
-    else out.push(part);
+    if (intents(part).length) {
+      out.push(lead ? `${lead} ${part}` : part);
+      lead = "";
+    } else if (out.length) out[out.length - 1] += ` and ${part}`;
+    else lead = lead ? `${lead} ${part}` : part;
   }
+  if (lead) out.push(lead);
   if (out.length > MAX_CLAUSES) return [...out.slice(0, MAX_CLAUSES - 1), out.slice(MAX_CLAUSES - 1).join(" and ")];
   return out.length ? out : [text.trim()];
 }

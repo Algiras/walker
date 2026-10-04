@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { generateMap, cellKey } from "../src/game/map";
 import { Game } from "../src/game/sim";
-import { ruleParse } from "../src/voice/rules";
+import { hintFrom, ruleParse, worldOf } from "../src/voice/rules";
 import { PAD_NAMES } from "../src/game/map";
 import { actionOptions, extraOptions } from "../src/voice/context";
-import { cleanTranscript, enemyNumber, splitCommands, gateOptions, hasEvidence, intents, intentOf, ordinalOf, slotNumber, spokenNumbers } from "../src/voice/verbs";
+import { cleanTranscript, enemyNumber, splitCommands, gateOptions, hasEvidence, intents, intentOf, ordinalOf, padsNamed, slotNumber, spokenNumbers } from "../src/voice/verbs";
 import { settle } from "../src/voice/settle";
 import { PickDecider } from "../src/voice/decide";
 import { COSTS } from "../src/game/sim";
 import { SpeechQueue } from "../src/voice/speech-queue";
-import { allLines, calloutFor, eventLine, refusalCallout } from "../src/voice/callouts";
+import { buildState, CASES, SCENARIOS, satisfies } from "./e2e/scenarios";
+import { allLines, calloutFor, eventLine, refusalCallout, warmLines } from "../src/voice/callouts";
 import { existsSync, readFileSync } from "node:fs";
 import { Command } from "../src/game/commands";
 import type { GameEvent } from "../src/game/sim";
@@ -179,6 +180,28 @@ describe("confidence and guard", () => {
   });
 });
 
+describe("how sure the decider is", () => {
+  const g = new Game(generateMap(7));
+  // No verb, so every kind of action stays in play next to Charlie's own, and the keywords can only say "move".
+  const model = (weights: Record<string, number>) => async ({ options }: { options: { key: string }[] }) => options.map((o) => weights[o.key] ?? 0.001);
+
+  it("acts when the winner clearly beats the runner-up", async () => {
+    const r = await new PickDecider("fake", model({ hold: 0.9, undo: 0.05 })).decide("Charlie please", g);
+    expect([r.command, r.status]).toEqual([{ kind: "hold" }, "act"]);
+  });
+
+  it("asks first when the runner-up is close", async () => {
+    const r = await new PickDecider("fake", model({ hold: 0.45, undo: 0.45 })).decide("Charlie please", g);
+    expect(r.status).toBe("confirm");
+    expect(r.confidence).toBeCloseTo(0.5);
+  });
+
+  it("rejects cleanly when the model's answer cannot be used", async () => {
+    const r = await new PickDecider("fake", async ({ options }) => options.map(() => NaN)).decide("Charlie please", g);
+    expect([r.status, r.command]).toEqual(["reject", null]);
+  });
+});
+
 describe("option gate details", () => {
   const seven = Array.from({ length: 200 }, (_, i) => i).find((i) => generateMap(i).pads.length === 7)!;
   const g = new Game(generateMap(seven));
@@ -191,6 +214,13 @@ describe("option gate details", () => {
   it("never offers more than Tev1's 24 letters", () => {
     expect(all.length).toBeGreaterThan(24);
     for (const t of ["", "Charlie", "hello there", "go build"]) expect(gateOptions(all, t).length).toBeLessThanOrEqual(24);
+  });
+  it("keeps none when it has to cut the list, and never repeats an option", () => {
+    for (const t of ["", "hello there", "Charlie please"]) {
+      const opts = gateOptions(all, t);
+      expect(opts.some((o) => o.value === null), t).toBe(true);
+      expect(new Set(opts.map((o) => o.key)).size).toBe(opts.length);
+    }
   });
   it("leaves only that pad's own move for go-to, with no patrol or nudges", () => {
     const h = new Game(generateMap(7));
@@ -652,9 +682,14 @@ describe("hero callouts", () => {
     for (const e of [...Array.from({ length: 60 }, (_, n): GameEvent => ({ kind: "wave", n })), ...(["baseHit", "built", "upgraded", "sold", "lost"] as const).map((kind): GameEvent => ({ kind }))]) {
       expect(lines.has(eventLine(e)), `no recording for "${eventLine(e)}"`).toBe(true);
     }
-    for (const m of ["Not enough gold: a tower costs 50", "There is no tower at A", "Pad 3 Charlie already has a tower.", "maximum level", "no enemies", "Nothing to undo.", "still arriving", "I did not catch that", "other"]) {
+    for (const m of ["Not enough gold: a tower costs 50", "There is no tower at A", "Pad 3 Charlie already has a tower.", "maximum level", "no enemies", "Nothing to undo.", "still arriving", "I did not catch that", "other", "The base has fallen.", "There is no pad 8.", "The hero is already there.", "There are no enemies to attack.", "Pad Alpha already has tower 1."]) {
       expect(lines.has(refusalCallout(m)), `no recording for "${refusalCallout(m)}"`).toBe(true);
     }
+  });
+
+  it("only warms up lines that have been recorded", () => {
+    const lines = new Set(allLines());
+    for (const l of warmLines(new Game(generateMap(7)))) expect(lines.has(l), l).toBe(true);
   });
 
   it("has a recording file for every line once they have been generated", () => {
@@ -819,5 +854,245 @@ describe("enemy words", () => {
     expect(ruleParse("attack the second one", w)).toEqual({ kind: "attack", mode: "rank", n: 2 });
     expect(ruleParse("delete tower 3", w)).toEqual({ kind: "sell", pad: "Charlie" });
     expect(ruleParse("remove Charlie", w)).toEqual({ kind: "sell", pad: "Charlie" });
+  });
+});
+
+describe("a pad the map does not have", () => {
+  // Seed 7 has five pads, Alpha to Echo.
+  const world = () => {
+    const g = new Game(generateMap(7));
+    g.hero.pos = { x: 9, y: 5.5 };
+    return g;
+  };
+  const ask = async (text: string, g = world()) => {
+    let asked = false;
+    const d = new PickDecider("fake", async ({ options }) => { asked = true; return options.map((_, i) => (i === 0 ? 1 : 0)); });
+    return { ...(await d.decide(text, g)), asked };
+  };
+
+  it("leaves nothing to choose, instead of falling back to the game's own pick", () => {
+    const g = world();
+    for (const t of ["upgrade tower 8", "upgrade tower 7", "build at Golf", "build a tower at Hotel", "go to Hotel"]) expect(gateOptions(actionOptions(g), t), t).toEqual([]);
+  });
+
+  it("is turned down with a reason, without asking the model", async () => {
+    const r = await ask("upgrade tower 8");
+    expect([r.status, r.note, r.asked]).toEqual(["reject", "There is no pad 8.", false]);
+    expect((await ask("build at Golf")).note).toBe("There is no pad Golf.");
+    expect((await ask("go to Hotel")).note).toBe("There is no pad Hotel.");
+  });
+
+  it("is not guessed by the keyword fallback either", () => {
+    const w = { padNames: PAD_NAMES.slice(0, 5), padOfSlot: (n: number) => PAD_NAMES.slice(0, 5)[n - 1], hasTower: () => false, best: () => ({ kind: "build", pad: "Echo" }) as const };
+    expect(ruleParse("upgrade tower 8", w)).toBeNull();
+    expect(ruleParse("build at Hotel", w)).toBeNull();
+    expect(ruleParse("we need more defense", w)).toEqual({ kind: "build", pad: "Echo" });
+  });
+
+  it("is not what 'delete', 'home' or 'gold' sound like", () => {
+    expect(padsNamed("delete the tower")).toEqual([]);
+    expect(padsNamed("go home")).toEqual([]);
+    expect(padsNamed("upgrade with the gold")).toEqual([]);
+    expect(padsNamed("move to Alfa")).toEqual(["Alpha"]);
+    expect(padsNamed("upgrade tower 2")).toEqual(["Bravo"]);
+  });
+
+  it("is still heard when speech recognition splits the name in two", () => {
+    expect(padsNamed("go to fox trot")).toEqual(["Foxtrot"]);
+    expect(padsNamed("build a tower at Fox Trot.")).toEqual(["Foxtrot"]);
+    expect(padsNamed("the fox ran")).toEqual([]);
+  });
+
+  it("does not make 'delete the tower' mean the tower on Delta", () => {
+    const g = world();
+    for (const p of ["Bravo", "Delta"]) g.addTower(p);
+    expect(gateOptions(actionOptions(g), "delete the tower").map((o) => o.key)).toEqual(["sell_bravo", "sell_delta"]);
+    expect(ruleParse("delete the tower", worldOf(g))).toBeNull();
+  });
+
+  it("still lets 'go home' reach the base", () => {
+    expect(gateOptions(actionOptions(world()), "go home").map((o) => o.key)).toContain("move_base");
+  });
+});
+
+describe("naming a pad settles the decision", () => {
+  const g = new Game(generateMap(7));
+  g.hero.pos = { x: 9, y: 5.5 };
+
+  it("drops the 'you choose' option, since the player did name a place", () => {
+    expect(gateOptions(actionOptions(g), "build a tower at Alpha").map((o) => o.key)).toEqual(["build_alpha"]);
+    expect(gateOptions(actionOptions(g), "make Charlie stronger").map((o) => o.key)).toEqual(["build_charlie"]);
+  });
+
+  it("keeps it when no pad is named", () => {
+    expect(gateOptions(actionOptions(g), "we need more defense").map((o) => o.key)).toContain("defend_auto");
+  });
+
+  it("does not run the model when the words leave a single option", async () => {
+    let asked = false;
+    const d = new PickDecider("fake", async () => { asked = true; return [1]; });
+    const r = await d.decide("build a tower at Alpha", g);
+    expect(asked).toBe(false);
+    expect([r.status, r.command]).toEqual(["act", { kind: "build", pad: "Alpha" }]);
+  });
+});
+
+describe("the hero is already there", () => {
+  const atBase = () => new Game(generateMap(7));
+
+  it("leaves nothing to guess when asked to go where it already stands", () => {
+    for (const t of ["retreat to the base", "go to the base", "go home"]) expect(gateOptions(actionOptions(atBase()), t), t).toEqual([]);
+    const g = atBase();
+    g.hero.pos = { ...g.map.spawn };
+    expect(gateOptions(actionOptions(g), "go to the spawn")).toEqual([]);
+  });
+
+  it("says so", async () => {
+    const d = new PickDecider("fake", async () => [1]);
+    expect((await d.decide("retreat to the base", atBase())).note).toBe("The hero is already there.");
+  });
+
+  it("keeps every move once the hero is somewhere else, and for a patrol or a route", () => {
+    const g = atBase();
+    g.hero.pos = { x: 9, y: 5.5 };
+    expect(gateOptions(actionOptions(g), "retreat to the base").map((o) => o.key)).toContain("move_base");
+    const home = atBase();
+    expect(gateOptions(actionOptions(home), "start patrol").map((o) => o.key)).toEqual(["patrol"]);
+    expect(gateOptions(actionOptions(home), "go from the base to Alpha").map((o) => o.key)).toEqual(["move_alpha"]);
+  });
+
+  it("tells the player when there is nothing to attack", async () => {
+    const d = new PickDecider("fake", async () => [1]);
+    expect((await d.decide("attack the nearest enemy", atBase())).note).toBe("There are no enemies to attack.");
+  });
+});
+
+describe("attack words", () => {
+  const g = new Game(generateMap(7));
+  g.hero.pos = { x: 9, y: 5.5 };
+  g.enemies.push({ id: 1, num: 1, kind: "grunt", d: 5, hp: 10, maxHp: 10, speed: 1, reward: 1 });
+  const keys = (t: string) => gateOptions([...extraOptions(t), ...actionOptions(g)], t).map((o) => o.key);
+  const world = worldOf(g);
+
+  it("does not read 'first' or 'last' as the front or back of the line when another kind of enemy is named", () => {
+    for (const t of ["attack the weakest enemy first", "kill the nearest one first", "attack the strongest one last"]) expect(keys(t), t).toHaveLength(5);
+    expect(keys("attack the first one")).toEqual(["attack_first"]);
+    expect(keys("attack the last one")).toEqual(["attack_last"]);
+  });
+
+  it("is read the same way by the keyword fallback", () => {
+    expect(ruleParse("attack the weakest enemy first", world)).toEqual({ kind: "attack", mode: "weakest" });
+    expect(ruleParse("kill the nearest one first", world)).toEqual({ kind: "attack", mode: "nearest" });
+    expect(ruleParse("attack the first one", world)).toEqual({ kind: "attack", mode: "first" });
+  });
+
+  it("understands the words the hero says back, such as 'engage target four' and 'attack the heavy'", () => {
+    expect(intents("engage the nearest")).toEqual(["attack"]);
+    expect(cleanTranscript("engage target four")).toBe("engage enemy 4");
+    expect(keys("attack target 3")).toEqual(["attack_enemy_3"]);
+    expect(ordinalOf("engage the second target")).toBe(2);
+    expect(keys("engage the second target")).toEqual(["attack_rank_2"]);
+    expect(ruleParse("attack the heavy", world)).toEqual({ kind: "attack", mode: "strongest" });
+    expect(ruleParse("attack the lead target", world)).toEqual({ kind: "attack", mode: "first" });
+    expect(ruleParse("attack the rear target", world)).toEqual({ kind: "attack", mode: "last" });
+    expect(keys("double time")).toEqual(["speed_up"]);
+  });
+
+  it("hears 'destroy enemy number three' as an enemy, not a tower", () => {
+    expect(cleanTranscript("destroy enemy number three")).toBe("destroy enemy 3");
+    expect(cleanTranscript("attack enemy number 3")).toBe("attack enemy 3");
+    expect(intents("destroy enemy number three")).toEqual(["attack"]);
+    expect(enemyNumber("destroy enemy number three")).toBe(3);
+    expect(keys("destroy enemy number three")).toEqual(["attack_enemy_3"]);
+  });
+});
+
+describe("build and upgrade words", () => {
+  it("are all defend words, and steer the game's own pick", () => {
+    for (const w of ["build", "place", "construct", "put", "create", "upgrade", "improve", "strengthen", "reinforce", "stronger"]) expect(intents(`${w} it`), w).toContain("defend");
+    expect(hintFrom("build near the base")).toMatchObject({ prefer: "build", near: "base" });
+    expect(hintFrom("make the towers stronger").prefer).toBe("upgrade");
+    expect(hintFrom("build and upgrade").prefer).toBeUndefined();
+  });
+
+  it("only imply an attack for an enemy number or a place in line, not next to build, hold or sell", () => {
+    expect(intents("the second one")).toEqual(["attack"]);
+    expect(intents("go after enemy 3")).toEqual(["move", "attack"]);
+    expect(intents("remove enemy 3")).toEqual(["sell", "attack"]);
+    expect(intents("sell tower 2 near enemy 3")).toEqual(["sell"]);
+    expect(intents("go to Alpha near enemy 3")).toEqual(["move"]);
+    expect(intents("sell the second one")).toEqual(["sell"]);
+    expect(intents("build a tower near enemy 3")).toEqual(["defend"]);
+    expect(intents("stop attacking enemy 3")).toEqual(["hold"]);
+  });
+});
+
+describe("stopping", () => {
+  const g = new Game(generateMap(7));
+  g.hero.pos = { x: 9, y: 5.5 };
+  const keys = (t: string) => gateOptions(actionOptions(g), t).map((o) => o.key);
+
+  it("hears 'stop there' as stop, but 'stop them' as something about the enemies", () => {
+    expect(intents("stop there")).toEqual(["hold"]);
+    expect(intents("stop them")).toEqual([]);
+    expect(intents("build near the spawn to stop them early")).toEqual(["defend"]);
+  });
+
+  it("does not start a patrol when asked to stop it", () => {
+    for (const t of ["stop patrol", "stop the patrol", "end the patrol", "cancel patrol"]) {
+      expect(keys(t), t).toEqual(["hold"]);
+      expect(ruleParse(t, worldOf(g)), t).toEqual({ kind: "hold" });
+    }
+    expect(keys("patrol the path")).toEqual(["patrol"]);
+  });
+});
+
+describe("sentences with a lead-in and with abbreviations", () => {
+  it("keeps a lead-in with the command that follows it", () => {
+    expect(splitCommands("Okay, go to Charlie")).toEqual(["Okay go to Charlie"]);
+    expect(splitCommands("Yes, build at Alpha. Then go left.")).toEqual(["Yes build at Alpha", "go left"]);
+    expect(splitCommands("Alpha, go there")).toEqual(["Alpha go there"]);
+    expect(splitCommands("Okay, thank you.")).toEqual(["Okay thank you"]);
+  });
+
+  it("does not cut a sentence after 'no.' as in 'tower no. 2'", () => {
+    expect(splitCommands("sell tower no. 2")).toEqual(["sell tower no. 2"]);
+    expect(slotNumber("sell tower no. 2")).toBe(2);
+    expect(splitCommands("go left. Pause.")).toEqual(["go left", "Pause"]);
+  });
+
+  it("does not hear 'no one' as a tower number", () => {
+    expect(cleanTranscript("there is no one here")).toBe("there is no one here");
+    expect(slotNumber("no one is coming")).toBeNull();
+    expect(slotNumber("no. 3")).toBe(3);
+    expect(slotNumber("no 3")).toBe(3);
+  });
+});
+
+describe("the spoken test cases, checked without the models", () => {
+  const states = CASES.map((c) => ({ c, g: buildState(SCENARIOS[c.scenario]) }));
+
+  it("keep the command they expect among the options the gate leaves", () => {
+    for (const { c, g } of states) {
+      const opts = gateOptions([...extraOptions(c.text), ...actionOptions(g)], c.text);
+      const want = c.expect;
+      const kept = want.kind === "exact"
+        ? opts.some((o) => JSON.stringify(o.value) === JSON.stringify(want.command))
+        : opts.some((o) => o.value === "auto" || o.value?.kind === "build" || o.value?.kind === "upgrade");
+      expect(kept, `${c.scenario}: "${c.text}" -> ${opts.map((o) => o.key).join(", ")}`).toBe(true);
+    }
+  });
+
+  it("are all understood by the keyword fallback too", () => {
+    for (const { c, g } of states) expect(satisfies(g, ruleParse(c.text, worldOf(g)), c.expect), `${c.scenario}: "${c.text}"`).toBeNull();
+  });
+});
+
+describe("what the hero says about a refusal", () => {
+  it("calls an occupied pad occupied, whichever way the message words it", () => {
+    expect(refusalCallout("Pad 3 Charlie already has a tower.")).toBe("Negative. Pad occupied.");
+    expect(refusalCallout('Pad Charlie already has tower 3. Say "upgrade tower 3" to upgrade it.')).toBe("Negative. Pad occupied.");
+    expect(refusalCallout("There are no enemies to attack.")).toBe("Negative. No such target.");
+    expect(refusalCallout("The base has fallen.")).toBe("Negative.");
   });
 });

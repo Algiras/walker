@@ -1,9 +1,6 @@
 import { Command } from "../game/commands";
 import { Game } from "../game/sim";
-import { normalize } from "./verbs";
-
-const BUILD = /\b(build|place|construct|put|create)\b/;
-const UPGRADE = /\b(upgrade|improve|strengthen|reinforce|stronger)\b/;
+import { BUILD, normalize, UPGRADE } from "./verbs";
 
 /**
  * Catches a decision that spends the player's gold on something other than what they literally said.

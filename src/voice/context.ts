@@ -1,11 +1,9 @@
-import { describeCommand, ordinal } from "../game/commands";
+import { Command, describeCommand, ordinal } from "../game/commands";
 import { enemyNumber, ordinalOf } from "./verbs";
 import { Game } from "../game/sim";
-import { Command } from "../game/commands";
 
 export type Action = Command | "auto";
 export interface Option { key: string; text: string; value: Action | null }
-
 
 export const NONE = "none of these, or unclear";
 export const AUTO = "strengthen the defense wherever it is needed most (the player named no place)";

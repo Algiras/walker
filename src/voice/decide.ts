@@ -3,7 +3,7 @@ import { Game } from "../game/sim";
 import { actionOptions, extraOptions } from "./context";
 import { hintFrom, ruleParse, worldOf } from "./rules";
 import { ACT_CONFIDENCE, AGREEMENT_CONFIDENCE, Decision, settle } from "./settle";
-import { cleanTranscript, gateOptions, hasEvidence, intents, normalize } from "./verbs";
+import { cleanTranscript, gateOptions, hasEvidence, intents, normalize, padsNamed, slotNumber } from "./verbs";
 
 export type { Decision, Status } from "./settle";
 
@@ -23,9 +23,15 @@ export type PickFn = (req: PickRequest) => Promise<number[]>;
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
 /** What to tell the player when the words point at an action that cannot exist right now. */
-function nothingTo(text: string): string {
+function nothingTo(text: string, game: Game): string {
   const found = intents(text);
   if (found.includes("sell")) return "There is no tower there to sell.";
+  const slot = slotNumber(text);
+  if (slot !== null && !game.map.pads[slot - 1]) return `There is no pad ${slot}.`;
+  const missing = padsNamed(text).find((name) => !game.padByName(name));
+  if (missing) return `There is no pad ${missing}.`;
+  if (found.includes("attack")) return "There are no enemies to attack.";
+  if (found.includes("move")) return "The hero is already there.";
   return "That is not possible right now.";
 }
 
@@ -37,16 +43,17 @@ export class PickDecider implements Decider {
   async decide(heard: string, game: Game): Promise<Decision> {
     const text = cleanTranscript(heard);
     const t0 = performance.now();
+    const reject = (note: string, trace: string): Decision => ({ command: null, confidence: 0, status: "reject", note, trace, ms: performance.now() - t0 });
     const evidence = hasEvidence(text);
-    if (!evidence && text.split(/\s+/).filter(Boolean).length <= 2) {
-      return { command: null, confidence: 0, status: "reject", note: "I did not catch that. Say it again?", trace: "nothing to act on in that", ms: performance.now() - t0 };
-    }
+    if (!evidence && text.split(/\s+/).filter(Boolean).length <= 2) return reject("I did not catch that. Say it again?", "nothing to act on in that");
     const opts = gateOptions([...extraOptions(text), ...actionOptions(game)], text);
-    if (!opts.length) return { command: null, confidence: 0, status: "reject", note: nothingTo(text), trace: "no legal action matches", ms: performance.now() - t0 };
+    if (!opts.length) return reject(nothingTo(text, game), "no legal action matches");
 
-    const probs = await this.pick({ utterance: text, context: game.summary(), options: opts });
+    // One option left means the words settled it: the model has nothing to choose between.
+    const probs = opts.length === 1 ? [1] : await this.pick({ utterance: text, context: game.summary(), options: opts });
     const index = probs.indexOf(Math.max(...probs));
     const chosen = opts[index];
+    if (!chosen) return reject("I did not catch that. Say it again?", "the model gave no usable answer");
     // How decisively the winner beats the runner-up. Raw probability understates certainty when
     // several near-identical options (every build, every upgrade) share the remaining mass.
     const runnerUp = Math.max(0, ...probs.filter((_, i) => i !== index));
