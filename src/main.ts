@@ -11,7 +11,7 @@ import { splitCommands } from "./voice/verbs";
 import { HeroVoice } from "./voice/hero-voice";
 import { calloutFor, CONFIRM, eventLine, refusalCallout, warmLines } from "./voice/callouts";
 import { $, announce, setText } from "./ui/dom";
-import { boardSize } from "./ui/layout";
+import { boardSize, nearestWithin } from "./ui/layout";
 import { PadMenu } from "./ui/pad-menu";
 import { Setup } from "./ui/setup";
 
@@ -378,13 +378,15 @@ canvas.addEventListener("click", (e) => {
   const r = canvas.getBoundingClientRect();
   const x = ((e.clientX - r.left) / r.width) * game.map.w;
   const y = ((e.clientY - r.top) / r.height) * game.map.h;
-  const enemy = game.enemies.find((en) => { const p = game.enemyPos(en); return Math.hypot(p.x - x, p.y - y) < 0.5; });
+  // On a small screen a tile is a few pixels wide, so the target grows to something a fingertip can hit.
+  const finger = 22 / (r.width / game.map.w);
+  const enemy = nearestWithin(game.enemies, (en) => game.enemyPos(en), { x, y }, Math.max(0.5, finger));
   if (enemy) {
     menu.close();
     press({ kind: "attack", mode: "number", n: enemy.num });
     return;
   }
-  const pad = game.map.pads.find((p) => Math.hypot(p.pos.x - x, p.pos.y - y) < 0.6);
+  const pad = nearestWithin(game.map.pads, (p) => p.pos, { x, y }, Math.max(0.6, finger));
   if (pad) {
     menu.open(pad.name);
     return;

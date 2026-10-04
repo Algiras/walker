@@ -1,9 +1,9 @@
 import { Command } from "../game/commands";
 import { COSTS, Game } from "../game/sim";
 import { announce } from "./dom";
+import type { Point } from "./layout";
 
 export interface MenuItem { label: string; price: string; command: Command; blocked: string | null }
-export interface Point { x: number; y: number }
 export interface Size { w: number; h: number }
 
 /** What can be done at a pad right now, with the price and, when it cannot be done, why. */

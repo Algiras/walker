@@ -2,8 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { generateMap } from "../src/game/map";
 import { Game } from "../src/game/sim";
-import { boardSize } from "../src/ui/layout";
+import { boardSize, nearestWithin } from "../src/ui/layout";
 import { menuItems, placeMenu } from "../src/ui/pad-menu";
+import { HeroVoice } from "../src/voice/hero-voice";
 import { Mic } from "../src/voice/mic";
 
 const BLOCK_MS = 8;
@@ -238,6 +239,21 @@ describe("board size", () => {
   });
 });
 
+describe("hit targets", () => {
+  const dots = [{ id: "a", x: 1, y: 1 }, { id: "b", x: 2, y: 1 }, { id: "c", x: 9, y: 9 }];
+  const at = (d: { x: number; y: number }) => d;
+
+  it("picks the closest item inside the radius", () => {
+    expect(nearestWithin(dots, at, { x: 1.8, y: 1 }, 1)?.id).toBe("b");
+    expect(nearestWithin(dots, at, { x: 1.2, y: 1 }, 1)?.id).toBe("a");
+  });
+
+  it("finds nothing outside the radius, or in an empty list", () => {
+    expect(nearestWithin(dots, at, { x: 5, y: 5 }, 1)).toBeUndefined();
+    expect(nearestWithin([], at, { x: 1, y: 1 }, 1)).toBeUndefined();
+  });
+});
+
 describe("colour contrast", () => {
   const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
 
@@ -287,4 +303,114 @@ describe("colour contrast", () => {
       for (const [fg, bg] of parts) expect(ratio(resolve(theme, fg), resolve(theme, bg)), `${fg} on ${bg}`).toBeGreaterThanOrEqual(3);
     });
   }
+});
+
+describe("hero voice", () => {
+  const LINE = "Holding position.";
+  const sources: { started: boolean; stopped: boolean }[] = [];
+
+  function setup(state: "running" | "suspended" = "running") {
+    sources.length = 0;
+    class Source {
+      buffer: { duration: number } | null = null;
+      onended: (() => void) | null = null;
+      started = false;
+      stopped = false;
+      connect() {}
+      start() {
+        this.started = true;
+        setTimeout(() => this.onended?.(), (this.buffer?.duration ?? 0) * 1000);
+      }
+      stop() {
+        this.stopped = true;
+        queueMicrotask(() => this.onended?.());
+      }
+      constructor() { sources.push(this); }
+    }
+    class Context {
+      state = state;
+      destination = {};
+      createGain() { return { gain: { value: 0 }, connect: (n: unknown) => n }; }
+      createDynamicsCompressor() { return { threshold: { value: 0 }, ratio: { value: 0 }, connect: (n: unknown) => n }; }
+      createBufferSource() { return new Source(); }
+      decodeAudioData() { return Promise.resolve({ duration: 0.5 }); }
+      resume() { return state === "suspended" ? new Promise<void>(() => {}) : Promise.resolve(); }
+    }
+    vi.useFakeTimers();
+    vi.stubGlobal("document", { baseURI: "http://localhost/" });
+    vi.stubGlobal("AudioContext", Context);
+    vi.stubGlobal("fetch", async (url: URL) => ({
+      ok: true,
+      json: async () => ({ lines: { [LINE]: "line.mp3" }, version: "1" }),
+      arrayBuffer: async () => new ArrayBuffer(8),
+      url,
+    }));
+    return new HeroVoice();
+  }
+
+  const pass = (ms: number) => vi.advanceTimersByTimeAsync(ms);
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("is speaking from the moment a line is accepted until it has finished", async () => {
+    const hero = setup();
+    expect(hero.speaking).toBe(false);
+    hero.say(LINE);
+    expect(hero.speaking).toBe(true);
+    await pass(300);
+    expect(sources[0].started).toBe(true);
+    expect(hero.speaking).toBe(true);
+    await pass(500);
+    expect(hero.speaking).toBe(false);
+  });
+
+  it("holds a reply back while the player is talking, and is not speaking meanwhile", async () => {
+    const hero = setup();
+    let talking = true;
+    hero.holdWhile = () => talking;
+    hero.say(LINE);
+    await pass(1000);
+    expect(sources).toHaveLength(0);
+    expect(hero.speaking).toBe(false);
+    talking = false;
+    await pass(200);
+    expect(sources[0].started).toBe(true);
+    expect(hero.speaking).toBe(true);
+  });
+
+  it("drops a game event instead of speaking over the player", async () => {
+    const hero = setup();
+    hero.holdWhile = () => true;
+    hero.say(LINE, 1);
+    await pass(1000);
+    expect(sources).toHaveLength(0);
+    expect(hero.speaking).toBe(false);
+  });
+
+  it("gives up waiting for a player who never stops, rather than staying silent for ever", async () => {
+    const hero = setup();
+    hero.holdWhile = () => true;
+    hero.say(LINE);
+    await pass(7000);
+    expect(sources[0]?.started).toBe(true);
+  });
+
+  it("does not start a line on a suspended audio context, and is not left speaking", async () => {
+    const hero = setup("suspended");
+    hero.say(LINE);
+    await pass(2000);
+    expect(sources).toHaveLength(0);
+    expect(hero.speaking).toBe(false);
+  });
+
+  it("says nothing once switched off", async () => {
+    const hero = setup();
+    hero.setEnabled(false);
+    hero.say(LINE);
+    expect(hero.speaking).toBe(false);
+    await pass(1000);
+    expect(sources).toHaveLength(0);
+  });
 });
