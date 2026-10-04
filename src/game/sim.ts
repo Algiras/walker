@@ -3,7 +3,7 @@ import { Command, FocusMode, Place } from "./commands";
 import { mulberry32, Rng } from "./rng";
 
 export interface Enemy { id: number; kind: "grunt" | "fast" | "tank"; d: number; hp: number; maxHp: number; speed: number; reward: number }
-export interface Tower { pad: string; pos: Vec; level: number; cd: number }
+export interface Tower { id: number; pad: string; pos: Vec; level: number; cd: number }
 export interface Beam { from: Vec; to: Vec; ttl: number; hero: boolean }
 type Order =
   | { type: "idle" }
@@ -42,6 +42,7 @@ export class Game {
   log: string[] = [];
   state: "playing" | "lost" = "playing";
   private nextId = 1;
+  private nextTower = 1;
   private spawnQueue: { at: number; kind: Enemy["kind"] }[] = [];
   private waveTimer = 4;
 
@@ -53,6 +54,13 @@ export class Game {
   }
 
   enemyPos(e: Enemy): Vec { return pointAt(this.map.path, e.d); }
+  addTower(pad: string, level = 1): Tower {
+    const p = this.padByName(pad)!;
+    const t: Tower = { id: this.nextTower++, pad: p.name, pos: p.pos, level, cd: 0 };
+    this.towers.push(t);
+    return t;
+  }
+  towerById(id: number) { return this.towers.find((t) => t.id === id); }
   towerAt(pad: string) { return this.towers.find((t) => t.pad === pad); }
   padByName(name: string) { return this.map.pads.find((p) => p.name.toLowerCase() === name.toLowerCase()); }
 
@@ -95,15 +103,15 @@ export class Game {
       if (this.towerAt(pad.name)) return this.say(`${pad.name} already has a tower.`);
       if (this.gold < COSTS.build) return this.say(`Need ${COSTS.build} gold to build.`);
       this.gold -= COSTS.build;
-      this.towers.push({ pad: pad.name, pos: pad.pos, level: 1, cd: 0 });
-      this.say(`Built a tower at ${pad.name}.`);
+      const t = this.addTower(pad.name);
+      this.say(`Built tower ${t.id} at ${pad.name}.`);
     } else if (c.kind === "upgrade") {
       const t = this.towerAt(c.pad);
       if (!t) return this.say(`No tower at ${c.pad} to upgrade.`);
       if (this.gold < COSTS.upgrade) return this.say(`Need ${COSTS.upgrade} gold to upgrade.`);
       this.gold -= COSTS.upgrade;
       t.level++;
-      this.say(`Upgraded ${c.pad} to level ${t.level}.`);
+      this.say(`Upgraded tower ${t.id} at ${c.pad} to level ${t.level}.`);
     }
   }
 
@@ -242,7 +250,7 @@ export class Game {
       }
       return {
         command: { kind: "upgrade", pad: s.name },
-        label: `upgrade the level ${s.level} tower at pad ${s.name}, make it stronger (${where})`,
+        label: `upgrade tower ${this.towerAt(s.name)!.id} at pad ${s.name}, level ${s.level} to ${s.level + 1}, make it stronger (${where})`,
         score: (value * 0.8) / s.level,
         affordable: this.gold >= COSTS.upgrade,
         stats: s,

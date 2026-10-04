@@ -1,7 +1,7 @@
 import { Command, FocusMode, Place } from "../game/commands";
 import { Game, Hint } from "../game/sim";
 import { Decider, Decision } from "./decide";
-import { VERBS } from "./verbs";
+import { spokenNumbers, towerNumber, VERBS } from "./verbs";
 
 const lev = (a: string, b: string) => {
   const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
@@ -23,6 +23,7 @@ export interface RuleWorld {
   padNames: string[];
   hasTower: (pad: string) => boolean;
   best: (hint: Hint) => Command | null;
+  padOfTower: (id: number) => string | undefined;
 }
 
 export function hintFrom(s: string): Hint {
@@ -35,9 +36,11 @@ export function hintFrom(s: string): Hint {
 }
 
 export function ruleParse(text: string, w: RuleWorld): Command | null {
-  const s = text.toLowerCase().replace(/[^a-z\s]/g, " ");
+  const num = towerNumber(text);
+  const s = spokenNumbers(text).toLowerCase().replace(/[^a-z\s]/g, " ");
   const words = s.split(/\s+/).filter(Boolean);
-  const pad = w.padNames.find((n) => words.some((x) => x === n.toLowerCase() || (x.length > 3 && closeEnough(x, n.toLowerCase()))));
+  const numbered = num === null ? undefined : w.padOfTower(num);
+  const pad = numbered ?? w.padNames.find((n) => words.some((x) => x === n.toLowerCase() || (x.length > 3 && closeEnough(x, n.toLowerCase()))));
   const place: Place | null = pad
     ? { type: "pad", name: pad }
     : has(s, /\b(base|home|retreat|fall back)\b/) ? { type: "base" }
@@ -68,6 +71,7 @@ export class RuleDecider implements Decider {
       padNames: game.map.pads.map((p) => p.name),
       hasTower: (n) => !!game.towerAt(n),
       best: (hint) => game.bestCandidate(hint)?.command ?? null,
+      padOfTower: (id) => game.towerById(id)?.pad,
     });
     return { command, confidence: command ? 1 : 0, trace: "keyword match", ms: performance.now() - t0 };
   }

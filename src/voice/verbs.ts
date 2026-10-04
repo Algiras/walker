@@ -33,3 +33,15 @@ export function gateOptions(options: Option[], text: string): Option[] {
   if (found.length !== 1) return options;
   return options.filter((o) => intentOf(o) === found[0]);
 }
+
+const WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+
+/** "tower two", "number 2" and "tower #2" all become "tower 2". */
+export function spokenNumbers(text: string): string {
+  return text.replace(/\b(tower|number|no)\.?\s*#?\s*(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/gi, (_, w: string, n: string) => `tower ${WORDS[n.toLowerCase()] ?? n}`);
+}
+
+export const towerNumber = (text: string): number | null => {
+  const m = spokenNumbers(text).match(/\btower (\d+)\b/i);
+  return m ? Number(m[1]) : null;
+};

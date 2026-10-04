@@ -30,8 +30,7 @@ export type ScenarioName = keyof typeof SCENARIOS;
 export function buildState(s: Scenario): Game {
   const g = new Game(generateMap(s.seed));
   for (const t of s.towers) {
-    const pad = g.map.pads[t.pad];
-    g.towers.push({ pad: pad.name, pos: pad.pos, level: t.level, cd: 0 });
+    g.addTower(g.map.pads[t.pad].name, t.level);
   }
   g.gold = s.gold;
   for (let i = 0; i < Math.round(s.warmup * 30); i++) g.step(1 / 30);

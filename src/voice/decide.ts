@@ -2,7 +2,7 @@ import { Command, describeCommand } from "../game/commands";
 import { Game } from "../game/sim";
 import { actionOptions } from "./context";
 import { hintFrom } from "./rules";
-import { gateOptions } from "./verbs";
+import { gateOptions, spokenNumbers } from "./verbs";
 
 export interface Decision {
   command: Command | null;
@@ -32,7 +32,8 @@ export class PickDecider implements Decider {
   readonly name: string;
   constructor(name: string, private pick: PickFn) { this.name = name; }
 
-  async decide(text: string, game: Game): Promise<Decision> {
+  async decide(heard: string, game: Game): Promise<Decision> {
+    const text = spokenNumbers(heard);
     const t0 = performance.now();
     const opts = gateOptions(actionOptions(game), text);
     const req = { utterance: text, context: game.summary() };

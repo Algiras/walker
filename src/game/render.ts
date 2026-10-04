@@ -53,8 +53,12 @@ export function render(ctx: CanvasRenderingContext2D, g: Game) {
     const x = t.pos.x * TILE, y = t.pos.y * TILE;
     ctx.fillStyle = C.tower;
     ctx.fillRect(x - TILE * 0.3, y - TILE * 0.3, TILE * 0.6, TILE * 0.6);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 16px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(String(t.id), x, y + 4);
     ctx.fillStyle = "#ffd166";
-    for (let i = 0; i < t.level; i++) ctx.fillRect(x - TILE * 0.25 + i * 9, y - TILE * 0.22, 6, 6);
+    for (let i = 0; i < t.level; i++) ctx.fillRect(x - TILE * 0.25 + i * 9, y + TILE * 0.2, 6, 6);
   }
   for (const e of g.enemies) {
     const p = g.enemyPos(e);

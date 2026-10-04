@@ -17,6 +17,7 @@ export function examplesFor(g: Game): Example[] {
   return [
     { group: "Name a pad", text: `**build** a tower at **${a}**`, expect: { kind: "exact", command: { kind: "build", pad: a } } },
     { group: "Name a pad", text: `**upgrade** **${b}**`, expect: { kind: "exact", command: { kind: built ? "upgrade" : "build", pad: b } } },
+    ...(g.towers.length ? [{ group: "Name a pad", text: `**upgrade** **tower ${g.towers[0].id}**`, expect: { kind: "exact", command: { kind: "upgrade", pad: g.towers[0].pad } } as Expect }] : []),
     { group: "Say a goal", text: `**defend** the **base**`, expect: { kind: "defend", pick: "base" } },
     { group: "Say a goal", text: `**build** near the **spawn** to stop them early`, expect: { kind: "defend", pick: "spawn" } },
     { group: "Say a goal", text: `**protect** the **left** side with a tower`, expect: { kind: "defend", pick: "left" } },

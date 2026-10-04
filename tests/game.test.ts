@@ -4,7 +4,7 @@ import { Game } from "../src/game/sim";
 import { ruleParse } from "../src/voice/rules";
 import { PAD_NAMES } from "../src/game/map";
 import { actionOptions } from "../src/voice/context";
-import { gateOptions, intentOf } from "../src/voice/verbs";
+import { gateOptions, intentOf, towerNumber } from "../src/voice/verbs";
 
 describe("map generation", () => {
   it("is deterministic per seed", () => {
@@ -65,6 +65,21 @@ describe("candidates", () => {
   });
 });
 
+describe("tower numbers", () => {
+  it("numbers towers in build order and finds them by number", () => {
+    const g = new Game(generateMap(7));
+    const a = g.addTower(g.map.pads[2].name), b = g.addTower(g.map.pads[0].name);
+    expect([a.id, b.id]).toEqual([1, 2]);
+    expect(g.towerById(2)?.pad).toBe(g.map.pads[0].name);
+    expect(g.candidates().find((c) => "pad" in c.command && c.command.pad === a.pad)?.label).toContain("tower 1");
+  });
+
+  it("hears numbers however they are spoken", () => {
+    for (const t of ["tower two", "Tower 2.", "number two", "tower #2", "no. 2"]) expect(towerNumber(t)).toBe(2);
+    expect(towerNumber("tower of power")).toBeNull();
+  });
+});
+
 describe("simulation", () => {
   it("builds a tower when the hero reaches a pad", () => {
     const g = new Game(generateMap(7));
@@ -83,13 +98,16 @@ describe("simulation", () => {
 });
 
 describe("keyword rules", () => {
-  const pads = { padNames: PAD_NAMES.slice(0, 6), hasTower: (n: string) => n === "Charlie", best: (h: { near?: string }) => ({ kind: "build", pad: h.near === "base" ? "Foxtrot" : "Echo" }) as const };
+  const pads = { padNames: PAD_NAMES.slice(0, 6), padOfTower: (id: number) => (id === 2 ? "Delta" : undefined), hasTower: (n: string) => n === "Charlie" || n === "Delta", best: (h: { near?: string }) => ({ kind: "build", pad: h.near === "base" ? "Foxtrot" : "Echo" }) as const };
   it.each([
     ["build a tower at bravo", { kind: "build", pad: "Bravo" }],
     ["upgrade charlie", { kind: "upgrade", pad: "Charlie" }],
     ["build at charlie", { kind: "upgrade", pad: "Charlie" }],
     ["we need more defense", { kind: "build", pad: "Echo" }],
     ["defend the base", { kind: "build", pad: "Foxtrot" }],
+    ["upgrade tower two", { kind: "upgrade", pad: "Delta" }],
+    ["upgrade tower 2", { kind: "upgrade", pad: "Delta" }],
+    ["upgrade number two", { kind: "upgrade", pad: "Delta" }],
     ["go to the base", { kind: "move", to: { type: "base" } }],
     ["attack the biggest one", { kind: "attack", mode: "strongest" }],
     ["stop", { kind: "hold" }],

@@ -100,6 +100,56 @@
     "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
   },
   {
+    "file": "upgrade-tower-1.af_heart.wav",
+    "voice": "af_heart",
+    "text": "upgrade tower 1",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "upgrade",
+        "pad": "Bravo"
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "upgrade-tower-1.am_michael.wav",
+    "voice": "am_michael",
+    "text": "upgrade tower 1",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "upgrade",
+        "pad": "Bravo"
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
     "file": "defend-the-base.af_heart.wav",
     "voice": "af_heart",
     "text": "defend the base",
