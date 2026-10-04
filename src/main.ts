@@ -7,11 +7,10 @@ import { Parakeet } from "./voice/asr";
 import { loadPicker } from "./voice/llm";
 import { Decider, PickDecider } from "./voice/decide";
 import { RuleDecider } from "./voice/rules";
-import { examplesFor } from "./voice/examples";
+import { examplesFor, plain } from "./voice/examples";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const params = new URLSearchParams(location.search);
-const LLM = params.get("llm") ?? "HuggingFaceTB/SmolLM2-360M-Instruct";
 
 const canvas = $<HTMLCanvasElement>("game");
 const ctx = canvas.getContext("2d")!;
@@ -24,7 +23,7 @@ let shownLog = 0;
 function newGame(seed = Math.floor(Math.random() * 1e6)) {
   game = new Game(generateMap(seed));
   $("seed").textContent = String(seed);
-  history.replaceState(null, "", `?seed=${seed}${params.get("llm") ? `&llm=${LLM}` : ""}`);
+  history.replaceState(null, "", `?seed=${seed}`);
   shownLog = 0;
   $("log").innerHTML = "";
   $("banner").hidden = true;
@@ -35,20 +34,12 @@ function newGame(seed = Math.floor(Math.random() * 1e6)) {
 function showExamples() {
   const box = $("examples");
   box.innerHTML = "";
-  let group = "";
   for (const ex of examplesFor(game)) {
-    if (ex.group !== group) {
-      group = ex.group;
-      const h = document.createElement("div");
-      h.className = "grp";
-      h.textContent = group;
-      box.append(h);
-    }
-    const phrase = ex.text.replaceAll("**", "");
     const btn = document.createElement("button");
     btn.type = "button";
+    btn.title = ex.group;
     btn.innerHTML = ex.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
-    btn.addEventListener("click", () => void handleText(phrase, performance.now()));
+    btn.addEventListener("click", () => void handleText(plain(ex.text), performance.now()));
     box.append(btn);
   }
 }
@@ -111,10 +102,9 @@ $("load").addEventListener("click", async () => {
     mic = await Mic.start();
     status("Loading Parakeet Redux…");
     parakeet = await Parakeet.load(progress, log);
-    status(`Parakeet ready (encoder on ${parakeet.encoderDevice}). Loading ${LLM}…`);
-    const device = "gpu" in navigator ? "webgpu" : "wasm";
-    const pick = await loadPicker({ model: LLM, device, dtype: device === "webgpu" ? "q4f16" : "q4", onProgress: progress });
-    decider = new PickDecider(LLM.split("/").pop()!, pick);
+    status(`Parakeet ready (encoder on ${parakeet.encoderDevice}). Loading Tev1 decision model…`);
+    const pick = await loadPicker(progress);
+    decider = new PickDecider("Tev1 0.8B", pick);
     $("decider").textContent = `Decision engine: ${decider.name}`;
     status("Ready. Hold Space and speak.");
     mic.onUtterance = (u) => onUtterance(u.pcm, u.endedAt);
@@ -157,6 +147,20 @@ function hud() {
   }
 }
 
+const board = document.querySelector<HTMLElement>(".board")!;
+const fit = () => {
+  const aspect = game.map.w / game.map.h;
+  const stacked = matchMedia("(max-width: 900px)").matches;
+  const w = stacked ? board.clientWidth : Math.min(board.clientWidth, board.clientHeight * aspect);
+  canvas.style.width = `${Math.floor(w)}px`;
+  canvas.style.height = `${Math.floor(w / aspect)}px`;
+};
+new ResizeObserver(fit).observe(board);
+const wide = matchMedia("(min-width: 901px)");
+const syncExamples = () => ($<HTMLDetailsElement>("try").open = wide.matches);
+wide.addEventListener("change", syncExamples);
+syncExamples();
+
 newGame(params.get("seed") ? Number(params.get("seed")) : undefined);
 let last = performance.now();
 let acc = 0;
@@ -168,4 +172,5 @@ function frame(now: number) {
   hud();
   requestAnimationFrame(frame);
 }
+fit();
 requestAnimationFrame(frame);

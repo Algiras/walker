@@ -9,7 +9,7 @@
 <body>
   <header>
     <h1>Walker</h1>
-    <span class="sub">Talk to your hero. Speech and decisions run entirely in your browser.</span>
+    <span class="sub">Talk to your hero. Speech and decisions run in your browser.</span>
     <span class="spacer"></span>
     <button id="newmap">New map</button>
   </header>
@@ -19,41 +19,42 @@
         <span>Wave <b id="wave">0</b></span>
         <span>Gold <b id="gold">0</b></span>
         <span>Base <b id="hp">0</b></span>
-        <span>Hero: <b id="order">idle</b></span>
+        <span class="order">Hero <b id="order">idle</b></span>
         <span class="seed">seed <b id="seed"></b></span>
       </div>
-      <canvas id="game"></canvas>
-      <div id="banner" hidden></div>
+      <div class="board">
+        <canvas id="game"></canvas>
+        <div id="banner" hidden></div>
+      </div>
     </section>
     <aside>
       <div class="card" id="voice">
-        <h2>Voice</h2>
-        <p class="hint">Hold <kbd>Space</kbd> and speak, e.g. “build a tower at Bravo”, “attack the strongest one”, “go back to base”.</p>
-        <div class="row">
-          <button id="load" class="primary">Load voice models</button>
-          <label><input type="checkbox" id="vad" /> auto-detect speech</label>
+        <div class="row between">
+          <h2>Voice</h2>
+          <label class="check"><input type="checkbox" id="vad" /> auto-detect</label>
         </div>
+        <button id="load" class="primary wide">Load voice models</button>
         <div class="bars" id="bars"></div>
         <div class="meter"><i id="level"></i></div>
-        <p class="note" id="status">Not loaded. First load downloads about 700 MB, then it is cached.</p>
+        <p class="note" id="status">Not loaded. The first load downloads about 1.3 GB, then it is cached. Hold <kbd>Space</kbd> to talk.</p>
       </div>
       <div class="card">
-        <h2>Last command</h2>
-        <div id="heard" class="heard">–</div>
-        <div id="decision" class="decision">–</div>
+        <h2>Command</h2>
+        <form id="typed"><input id="text" autocomplete="off" placeholder="or type: go to Alpha" /><button>Send</button></form>
+        <div id="heard" class="heard"></div>
+        <div id="decision" class="decision"></div>
         <table id="timing"><tbody></tbody></table>
-      </div>
-      <div class="card">
-        <h2>Try saying</h2>
-        <p class="hint">Keywords in <b>bold</b> carry the decision. Click a phrase to send it as text.</p>
-        <div id="examples"></div>
-      </div>
-      <div class="card">
-        <h2>Type instead</h2>
-        <form id="typed"><input id="text" autocomplete="off" placeholder="go to Alpha" /><button>Send</button></form>
         <p class="note" id="decider"></p>
       </div>
-      <div class="card log"><h2>Log</h2><div id="log"></div></div>
+      <details class="card" id="try">
+        <summary>Try saying</summary>
+        <p class="hint">Keywords in <b>bold</b> carry the decision. Click a phrase to send it as text.</p>
+        <div id="examples"></div>
+      </details>
+      <details class="card">
+        <summary>Log</summary>
+        <div id="log"></div>
+      </details>
     </aside>
   </main>
   <script type="module" src="/src/main.ts"></script>

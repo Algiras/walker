@@ -235,13 +235,14 @@ export class Game {
   candidates(): Candidate[] {
     return this.padStats().map((s) => {
       const value = s.coverage + 4 * s.threat;
-      const where = `${s.where}; covers ${s.coverage.toFixed(1)} tiles of path, ${progressWord(s.progress)}; ${s.threat} enemies in range now`;
+      const pressure = s.threat ? `, ${s.threat} enemies in range now` : "";
+      const where = `${s.where}, ${progressWord(s.progress)}${pressure}`;
       if (s.level === 0) {
-        return { command: { kind: "build", pad: s.name }, label: `build a tower at ${s.name} (${where})`, score: value + 2, affordable: this.gold >= COSTS.build, stats: s };
+        return { command: { kind: "build", pad: s.name }, label: `build a new tower at pad ${s.name} (${where})`, score: value + 2, affordable: this.gold >= COSTS.build, stats: s };
       }
       return {
         command: { kind: "upgrade", pad: s.name },
-        label: `upgrade the tower at ${s.name} (level ${s.level} to ${s.level + 1}; ${where})`,
+        label: `upgrade the level ${s.level} tower at pad ${s.name}, make it stronger (${where})`,
         score: (value * 0.8) / s.level,
         affordable: this.gold >= COSTS.upgrade,
         stats: s,
@@ -259,7 +260,7 @@ export class Game {
       if (inArea.length) pool = inArea;
     }
     const bonus = (c: Candidate) =>
-      (hint.near === "base" ? c.stats.progress * 20 : 0) + (hint.near === "spawn" ? (1 - c.stats.progress) * 20 : 0) + (hint.pressure ? c.stats.threat * 10 : 0);
+      (hint.near === "base" ? c.stats.progress * 60 : 0) + (hint.near === "spawn" ? (1 - c.stats.progress) * 60 : 0) + (hint.pressure ? c.stats.threat * 20 : 0);
     return pool.reduce<Candidate | undefined>((a, b) => (!a || b.score + bonus(b) > a.score + bonus(a) ? b : a), undefined);
   }
 

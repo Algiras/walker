@@ -3,7 +3,7 @@
 Talk to a hero in a tower-defense map. Speech recognition and command understanding both run in your browser; nothing is sent to a server.
 
 - **Speech to text:** [Parakeet Redux](https://huggingface.co/moondream/parakeet-redux), a 1.58-bit (ternary) version of NVIDIA's `parakeet-tdt-0.6b-v3`, via the [ONNX export](https://huggingface.co/eschmidbauer/parakeet-redux-onnx) on onnxruntime-web (encoder on WebGPU, wasm fallback).
-- **Decisions:** a small open instruct model (default [SmolLM2-360M-Instruct](https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct), q4f16) through transformers.js. It never generates text. Each step is a calibrated *pick one* over a fixed option list, scored from the next-token logits of the option letters (the same idea as Jev). Low confidence means "say again", not a guess.
+- **Decisions:** Together's [Tev1 0.8B](https://huggingface.co/togethercomputer/Tev1-0.8B-experimental), an open decision model in the spirit of Jev, via the [ONNX export](https://huggingface.co/goldenfox/tev1-0.8b-decision-onnx) on onnxruntime-web (WebGPU). It never generates text: the game lists every legal action as a lettered option and the model's next-token logits pick one. Low confidence means "say again", not a guess. A keyword gate in front of it ("go" means movement, "build" means defense) keeps small-model confusions out.
 - **Game:** a seeded random map (path plus named build pads) and a hero you command by voice.
 
 ## Play
@@ -13,7 +13,7 @@ npm install
 npm run dev
 ```
 
-Open the page, press **Load voice models** (about 700 MB on first load, cached afterwards), then hold **Space** and speak:
+Open the page, press **Load voice models** (about 1.3 GB on first load, cached afterwards), then hold **Space** and speak:
 
 - "build a tower at Bravo"
 - "upgrade Charlie"
@@ -21,9 +21,9 @@ Open the page, press **Load voice models** (about 700 MB on first load, cached a
 - "attack the strongest one" / "nearest" / "weakest" / "first"
 - "stop"
 
-There is also a text box that goes through the same decision step, and a keyword fallback is used until the LLM has loaded. `?seed=123` pins a map. `?llm=onnx-community/Qwen2.5-0.5B-Instruct` swaps the decision model.
+There is also a text box that goes through the same decision step, and a keyword fallback is used until the models have loaded. `?seed=123` pins a map.
 
-Needs a Chromium-based browser with WebGPU for a comfortable speed. On other browsers it falls back to wasm, which is much slower.
+Needs a Chromium-based browser with WebGPU. Without it the decision model is unavailable and the keyword fallback is used.
 
 ## What to say
 
@@ -43,11 +43,11 @@ For build and upgrade the model sees one legal action per pad (build if empty, u
 ## How a command flows
 
 ```
-Space held → mic (16 kHz) → Parakeet (preprocessor → encoder → TDT decode loop)
-           → text → action pick → (place | enemy-focus pick) → Command → hero order
+Space held → mic (16 kHz) → Parakeet (preprocessor → encoder → TDT decode loop) → text
+           → keyword gate → legal actions in the current state → Tev1 letter pick → Command → game state
 ```
 
-Each pick prompt lists the options with live game context (pad names, where they are, which have towers). The decider returns the winning option and its probability.
+Speech to text, one decision, then the action: `(state, text) → new state`. The decision prompt is Tev1's native JSON (`state`, `question`, `options` with label, key and description) and lists only transitions that are legal right now.
 
 ## Layout
 
@@ -55,9 +55,35 @@ Each pick prompt lists the options with live game context (pad names, where they
 |---|---|
 | `src/game/` | seeded map generator, simulation, canvas renderer |
 | `src/voice/asr.ts` | Parakeet Redux ONNX pipeline and TDT greedy decoder |
-| `src/voice/llm.ts`, `decide.ts` | pick-one scoring and the two-step decider |
-| `src/voice/rules.ts` | keyword fallback, also a test oracle |
+| `src/voice/tev1.ts`, `llm.ts`, `decide.ts`, `context.ts`, `verbs.ts` | Tev1 runner, the single-pass decider, legal-action list, keyword gate |
+| `src/voice/rules.ts` | keyword fallback before the models load |
 | `src/voice/mic.ts` | capture, push-to-talk and simple energy VAD |
+
+## Tests
+
+```bash
+npm test            # unit tests: map, simulation, keyword rules and gate
+npm run gen:audio   # records spoken fixtures with Kokoro (cached; only missing clips are synthesised)
+npm run test:e2e    # spoken fixtures → Parakeet → Tev1 → expected command in a given game state
+npm run bench:llm   # decision accuracy on the ground-truth text
+npm run bench:stt   # compares speech recognizers, clean and noisy
+```
+
+The end-to-end cases live in `tests/e2e/scenarios.ts`: named game states (seed, towers, gold, wave progress, hero position) and a phrase with the expected outcome. Audio fixtures in `tests/fixtures/audio/` are committed. The first e2e run downloads about 1.3 GB into the gitignored `.cache/`.
+
+## Speech recognizer comparison
+
+`npm run bench:stt` on the spoken fixtures with added noise (word error rate, Node CPU):
+
+| Model | Download | clean | 15 dB | 5 dB | per clip |
+|---|---|---|---|---|---|
+| Parakeet Redux (default) | 440 MB | 2.5% | 2.5% | 8.2% | ~150 ms |
+| Parakeet TDT 0.6B v2 int8 | 661 MB | 1.3% | 1.3% | 2.5% | ~100 ms |
+| Moonshine base | 63 MB | 1.3% | 1.9% | 8.2% | ~65 ms |
+| Whisper base.en | ~150 MB | 3.2% | 2.5% | 5.1% | ~350 ms |
+| Whisper small.en | ~250 MB | 2.5% | 0.6% | 1.3% | ~1 s |
+
+The clips are clean TTS plus synthetic noise, so treat this as a relative ranking, not a field measurement.
 
 ## Deploy
 
@@ -68,4 +94,5 @@ Each pick prompt lists the options with live game context (pad names, where they
 Code: MIT. Models are fetched from the Hugging Face Hub at runtime and are not part of this repository:
 
 - Parakeet Redux: CC-BY-4.0, by [moondream](https://huggingface.co/moondream/parakeet-redux), derived from [NVIDIA parakeet-tdt-0.6b-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3). ONNX export by [eschmidbauer](https://huggingface.co/eschmidbauer/parakeet-redux-onnx).
-- SmolLM2-360M-Instruct: Apache-2.0, Hugging Face.
+- Tev1 0.8B: by Together AI on Qwen3.5-0.8B (Apache-2.0). The fine-tune's own license is still being finalised upstream; check [the model card](https://huggingface.co/togethercomputer/Tev1-0.8B-experimental) before redistributing. ONNX export by [goldenfox](https://huggingface.co/goldenfox/tev1-0.8b-decision-onnx).
+- Kokoro-82M (Apache-2.0) is used only to record the test fixtures.

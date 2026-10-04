@@ -3,6 +3,8 @@ import { generateMap, cellKey } from "../src/game/map";
 import { Game } from "../src/game/sim";
 import { ruleParse } from "../src/voice/rules";
 import { PAD_NAMES } from "../src/game/map";
+import { actionOptions } from "../src/voice/context";
+import { gateOptions, intentOf } from "../src/voice/verbs";
 
 describe("map generation", () => {
   it("is deterministic per seed", () => {
@@ -95,4 +97,23 @@ describe("keyword rules", () => {
   ])("%s", (text, expected) => expect(ruleParse(text, pads)).toEqual(expected));
 
   it("rejects chatter", () => expect(ruleParse("what a lovely day", pads)).toBeNull());
+});
+
+describe("keyword gate", () => {
+  const g = new Game(generateMap(7));
+  g.hero.pos = { x: 9, y: 5.5 };
+  const kinds = (text: string) => new Set(gateOptions(actionOptions(g), text).map((o) => intentOf(o)).filter(Boolean));
+
+  it("keeps only movement options when the player says go", () => expect([...kinds("go to Charlie")]).toEqual(["move"]));
+  it("keeps only defense options for build, upgrade and stronger", () => {
+    for (const t of ["build a tower at Bravo", "upgrade Alpha", "make the towers stronger"]) expect([...kinds(t)]).toEqual(["defend"]);
+  });
+  it("leaves every option when verbs are mixed or missing", () => {
+    expect(kinds("go build a tower").size).toBeGreaterThan(1);
+    expect(kinds("Charlie please").size).toBeGreaterThan(1);
+  });
+  it("drops none once the verbs settle the intent, and keeps it otherwise", () => {
+    expect(gateOptions(actionOptions(g), "go to Alpha").some((o) => o.value === null)).toBe(false);
+    expect(gateOptions(actionOptions(g), "Alpha").some((o) => o.value === null)).toBe(true);
+  });
 });

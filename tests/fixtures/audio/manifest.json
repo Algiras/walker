@@ -1,0 +1,986 @@
+[
+  {
+    "file": "build-a-tower-at-alpha.af_heart.wav",
+    "voice": "af_heart",
+    "text": "build a tower at Alpha",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "build",
+        "pad": "Alpha"
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "build-a-tower-at-alpha.am_michael.wav",
+    "voice": "am_michael",
+    "text": "build a tower at Alpha",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "build",
+        "pad": "Alpha"
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "upgrade-bravo.af_heart.wav",
+    "voice": "af_heart",
+    "text": "upgrade Bravo",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "upgrade",
+        "pad": "Bravo"
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "upgrade-bravo.am_michael.wav",
+    "voice": "am_michael",
+    "text": "upgrade Bravo",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "upgrade",
+        "pad": "Bravo"
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "defend-the-base.af_heart.wav",
+    "voice": "af_heart",
+    "text": "defend the base",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "defend",
+      "pick": "base"
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "defend-the-base.am_michael.wav",
+    "voice": "am_michael",
+    "text": "defend the base",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "defend",
+      "pick": "base"
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "build-near-the-spawn-to-stop-them-early.af_heart.wav",
+    "voice": "af_heart",
+    "text": "build near the spawn to stop them early",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "defend",
+      "pick": "spawn"
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "build-near-the-spawn-to-stop-them-early.am_michael.wav",
+    "voice": "am_michael",
+    "text": "build near the spawn to stop them early",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "defend",
+      "pick": "spawn"
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "protect-the-left-side-with-a-tower.af_heart.wav",
+    "voice": "af_heart",
+    "text": "protect the left side with a tower",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "defend",
+      "pick": "left"
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "protect-the-left-side-with-a-tower.am_michael.wav",
+    "voice": "am_michael",
+    "text": "protect the left side with a tower",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "defend",
+      "pick": "left"
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "put-a-tower-where-the-enemies-are.af_heart.wav",
+    "voice": "af_heart",
+    "text": "put a tower where the enemies are",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "defend",
+      "pick": "pressure"
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "put-a-tower-where-the-enemies-are.am_michael.wav",
+    "voice": "am_michael",
+    "text": "put a tower where the enemies are",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "defend",
+      "pick": "pressure"
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "we-need-more-defense.af_heart.wav",
+    "voice": "af_heart",
+    "text": "we need more defense",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "defend"
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "we-need-more-defense.am_michael.wav",
+    "voice": "am_michael",
+    "text": "we need more defense",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "defend"
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "make-the-towers-stronger.af_heart.wav",
+    "voice": "af_heart",
+    "text": "make the towers stronger",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "defend"
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "make-the-towers-stronger.am_michael.wav",
+    "voice": "am_michael",
+    "text": "make the towers stronger",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "defend"
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "go-to-charlie.af_heart.wav",
+    "voice": "af_heart",
+    "text": "go to Charlie",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "move",
+        "to": {
+          "type": "pad",
+          "name": "Charlie"
+        }
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "go-to-charlie.am_michael.wav",
+    "voice": "am_michael",
+    "text": "go to Charlie",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "move",
+        "to": {
+          "type": "pad",
+          "name": "Charlie"
+        }
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "retreat-to-the-base.af_heart.wav",
+    "voice": "af_heart",
+    "text": "retreat to the base",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "move",
+        "to": {
+          "type": "base"
+        }
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "retreat-to-the-base.am_michael.wav",
+    "voice": "am_michael",
+    "text": "retreat to the base",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "move",
+        "to": {
+          "type": "base"
+        }
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "attack-the-strongest-one.af_heart.wav",
+    "voice": "af_heart",
+    "text": "attack the strongest one",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "attack",
+        "mode": "strongest"
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "attack-the-strongest-one.am_michael.wav",
+    "voice": "am_michael",
+    "text": "attack the strongest one",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "attack",
+        "mode": "strongest"
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "attack-the-nearest-enemy.af_heart.wav",
+    "voice": "af_heart",
+    "text": "attack the nearest enemy",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "attack",
+        "mode": "nearest"
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "attack-the-nearest-enemy.am_michael.wav",
+    "voice": "am_michael",
+    "text": "attack the nearest enemy",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "attack",
+        "mode": "nearest"
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "stop-hold-position.af_heart.wav",
+    "voice": "af_heart",
+    "text": "stop, hold position",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "hold"
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "stop-hold-position.am_michael.wav",
+    "voice": "am_michael",
+    "text": "stop, hold position",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "hold"
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40). Base health 20. 6 enemies (6 grunt). Hero is idle."
+  },
+  {
+    "file": "build-a-tower-at-delta.af_heart.wav",
+    "voice": "af_heart",
+    "text": "build a tower at Delta",
+    "scenario": "opening",
+    "state": {
+      "seed": 21,
+      "towers": [],
+      "gold": 100,
+      "warmup": 0
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "build",
+        "pad": "Delta"
+      }
+    },
+    "summary": "Wave 0. Gold 100 (build 50, upgrade 40). Base health 20. no enemies right now. Hero is idle."
+  },
+  {
+    "file": "build-a-tower-at-delta.am_michael.wav",
+    "voice": "am_michael",
+    "text": "build a tower at Delta",
+    "scenario": "opening",
+    "state": {
+      "seed": 21,
+      "towers": [],
+      "gold": 100,
+      "warmup": 0
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "build",
+        "pad": "Delta"
+      }
+    },
+    "summary": "Wave 0. Gold 100 (build 50, upgrade 40). Base health 20. no enemies right now. Hero is idle."
+  },
+  {
+    "file": "we-need-more-defense.af_heart.wav",
+    "voice": "af_heart",
+    "text": "we need more defense",
+    "scenario": "opening",
+    "state": {
+      "seed": 21,
+      "towers": [],
+      "gold": 100,
+      "warmup": 0
+    },
+    "expect": {
+      "kind": "defend"
+    },
+    "summary": "Wave 0. Gold 100 (build 50, upgrade 40). Base health 20. no enemies right now. Hero is idle."
+  },
+  {
+    "file": "we-need-more-defense.am_michael.wav",
+    "voice": "am_michael",
+    "text": "we need more defense",
+    "scenario": "opening",
+    "state": {
+      "seed": 21,
+      "towers": [],
+      "gold": 100,
+      "warmup": 0
+    },
+    "expect": {
+      "kind": "defend"
+    },
+    "summary": "Wave 0. Gold 100 (build 50, upgrade 40). Base health 20. no enemies right now. Hero is idle."
+  },
+  {
+    "file": "go-to-the-spawn.af_heart.wav",
+    "voice": "af_heart",
+    "text": "go to the spawn",
+    "scenario": "opening",
+    "state": {
+      "seed": 21,
+      "towers": [],
+      "gold": 100,
+      "warmup": 0
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "move",
+        "to": {
+          "type": "spawn"
+        }
+      }
+    },
+    "summary": "Wave 0. Gold 100 (build 50, upgrade 40). Base health 20. no enemies right now. Hero is idle."
+  },
+  {
+    "file": "go-to-the-spawn.am_michael.wav",
+    "voice": "am_michael",
+    "text": "go to the spawn",
+    "scenario": "opening",
+    "state": {
+      "seed": 21,
+      "towers": [],
+      "gold": 100,
+      "warmup": 0
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "move",
+        "to": {
+          "type": "spawn"
+        }
+      }
+    },
+    "summary": "Wave 0. Gold 100 (build 50, upgrade 40). Base health 20. no enemies right now. Hero is idle."
+  },
+  {
+    "file": "upgrade-charlie.af_heart.wav",
+    "voice": "af_heart",
+    "text": "upgrade Charlie",
+    "scenario": "fortified",
+    "state": {
+      "seed": 21,
+      "towers": [
+        {
+          "pad": 0,
+          "level": 1
+        },
+        {
+          "pad": 2,
+          "level": 2
+        },
+        {
+          "pad": 4,
+          "level": 1
+        }
+      ],
+      "gold": 200,
+      "warmup": 8
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "upgrade",
+        "pad": "Charlie"
+      }
+    },
+    "summary": "Wave 1. Gold 200 (build 50, upgrade 40). Base health 20. 5 enemies (5 grunt). Hero is idle."
+  },
+  {
+    "file": "upgrade-charlie.am_michael.wav",
+    "voice": "am_michael",
+    "text": "upgrade Charlie",
+    "scenario": "fortified",
+    "state": {
+      "seed": 21,
+      "towers": [
+        {
+          "pad": 0,
+          "level": 1
+        },
+        {
+          "pad": 2,
+          "level": 2
+        },
+        {
+          "pad": 4,
+          "level": 1
+        }
+      ],
+      "gold": 200,
+      "warmup": 8
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "upgrade",
+        "pad": "Charlie"
+      }
+    },
+    "summary": "Wave 1. Gold 200 (build 50, upgrade 40). Base health 20. 5 enemies (5 grunt). Hero is idle."
+  },
+  {
+    "file": "make-the-towers-stronger.af_heart.wav",
+    "voice": "af_heart",
+    "text": "make the towers stronger",
+    "scenario": "fortified",
+    "state": {
+      "seed": 21,
+      "towers": [
+        {
+          "pad": 0,
+          "level": 1
+        },
+        {
+          "pad": 2,
+          "level": 2
+        },
+        {
+          "pad": 4,
+          "level": 1
+        }
+      ],
+      "gold": 200,
+      "warmup": 8
+    },
+    "expect": {
+      "kind": "defend"
+    },
+    "summary": "Wave 1. Gold 200 (build 50, upgrade 40). Base health 20. 5 enemies (5 grunt). Hero is idle."
+  },
+  {
+    "file": "make-the-towers-stronger.am_michael.wav",
+    "voice": "am_michael",
+    "text": "make the towers stronger",
+    "scenario": "fortified",
+    "state": {
+      "seed": 21,
+      "towers": [
+        {
+          "pad": 0,
+          "level": 1
+        },
+        {
+          "pad": 2,
+          "level": 2
+        },
+        {
+          "pad": 4,
+          "level": 1
+        }
+      ],
+      "gold": 200,
+      "warmup": 8
+    },
+    "expect": {
+      "kind": "defend"
+    },
+    "summary": "Wave 1. Gold 200 (build 50, upgrade 40). Base health 20. 5 enemies (5 grunt). Hero is idle."
+  },
+  {
+    "file": "defend-the-base.af_heart.wav",
+    "voice": "af_heart",
+    "text": "defend the base",
+    "scenario": "fortified",
+    "state": {
+      "seed": 21,
+      "towers": [
+        {
+          "pad": 0,
+          "level": 1
+        },
+        {
+          "pad": 2,
+          "level": 2
+        },
+        {
+          "pad": 4,
+          "level": 1
+        }
+      ],
+      "gold": 200,
+      "warmup": 8
+    },
+    "expect": {
+      "kind": "defend",
+      "pick": "base"
+    },
+    "summary": "Wave 1. Gold 200 (build 50, upgrade 40). Base health 20. 5 enemies (5 grunt). Hero is idle."
+  },
+  {
+    "file": "defend-the-base.am_michael.wav",
+    "voice": "am_michael",
+    "text": "defend the base",
+    "scenario": "fortified",
+    "state": {
+      "seed": 21,
+      "towers": [
+        {
+          "pad": 0,
+          "level": 1
+        },
+        {
+          "pad": 2,
+          "level": 2
+        },
+        {
+          "pad": 4,
+          "level": 1
+        }
+      ],
+      "gold": 200,
+      "warmup": 8
+    },
+    "expect": {
+      "kind": "defend",
+      "pick": "base"
+    },
+    "summary": "Wave 1. Gold 200 (build 50, upgrade 40). Base health 20. 5 enemies (5 grunt). Hero is idle."
+  },
+  {
+    "file": "attack-the-weakest-enemy.af_heart.wav",
+    "voice": "af_heart",
+    "text": "attack the weakest enemy",
+    "scenario": "fortified",
+    "state": {
+      "seed": 21,
+      "towers": [
+        {
+          "pad": 0,
+          "level": 1
+        },
+        {
+          "pad": 2,
+          "level": 2
+        },
+        {
+          "pad": 4,
+          "level": 1
+        }
+      ],
+      "gold": 200,
+      "warmup": 8
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "attack",
+        "mode": "weakest"
+      }
+    },
+    "summary": "Wave 1. Gold 200 (build 50, upgrade 40). Base health 20. 5 enemies (5 grunt). Hero is idle."
+  },
+  {
+    "file": "attack-the-weakest-enemy.am_michael.wav",
+    "voice": "am_michael",
+    "text": "attack the weakest enemy",
+    "scenario": "fortified",
+    "state": {
+      "seed": 21,
+      "towers": [
+        {
+          "pad": 0,
+          "level": 1
+        },
+        {
+          "pad": 2,
+          "level": 2
+        },
+        {
+          "pad": 4,
+          "level": 1
+        }
+      ],
+      "gold": 200,
+      "warmup": 8
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "attack",
+        "mode": "weakest"
+      }
+    },
+    "summary": "Wave 1. Gold 200 (build 50, upgrade 40). Base health 20. 5 enemies (5 grunt). Hero is idle."
+  }
+]

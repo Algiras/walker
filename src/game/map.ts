@@ -63,7 +63,7 @@ export function generateMap(seed: number, w = 18, h = 11): GameMap {
     }
   }
   const pads: Pad[] = [];
-  const count = randInt(r, 6, 8);
+  const count = randInt(r, 5, 7);
   for (const c of shuffle(r, candidates)) {
     if (pads.length >= count) break;
     if (pads.some((p) => Math.abs(p.pos.x - (c.x + 0.5)) + Math.abs(p.pos.y - (c.y + 0.5)) < 3)) continue;

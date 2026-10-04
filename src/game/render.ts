@@ -33,8 +33,9 @@ export function render(ctx: CanvasRenderingContext2D, g: Game) {
   marker(ctx, g.map.spawn.x, g.map.spawn.y, C.spawn, "S");
   marker(ctx, g.map.base.x, g.map.base.y, C.base, "B");
 
-  ctx.font = "bold 11px system-ui, sans-serif";
+  ctx.font = "bold 13px system-ui, sans-serif";
   ctx.textAlign = "center";
+  ctx.lineJoin = "round";
   for (const p of g.map.pads) {
     const x = p.pos.x * TILE, y = p.pos.y * TILE;
     ctx.fillStyle = C.pad;
@@ -42,8 +43,11 @@ export function render(ctx: CanvasRenderingContext2D, g: Game) {
     ctx.lineWidth = 2;
     ctx.fillRect(x - TILE * 0.4, y - TILE * 0.4, TILE * 0.8, TILE * 0.8);
     ctx.strokeRect(x - TILE * 0.4, y - TILE * 0.4, TILE * 0.8, TILE * 0.8);
+    ctx.strokeStyle = "rgba(0,0,0,.7)";
+    ctx.lineWidth = 3;
+    ctx.strokeText(p.name, x, y + TILE * 0.74);
     ctx.fillStyle = "#fff";
-    ctx.fillText(p.name, x, y + TILE * 0.62);
+    ctx.fillText(p.name, x, y + TILE * 0.74);
   }
   for (const t of g.towers) {
     const x = t.pos.x * TILE, y = t.pos.y * TILE;

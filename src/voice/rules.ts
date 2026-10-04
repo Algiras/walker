@@ -1,6 +1,7 @@
 import { Command, FocusMode, Place } from "../game/commands";
 import { Game, Hint } from "../game/sim";
 import { Decider, Decision } from "./decide";
+import { VERBS } from "./verbs";
 
 const lev = (a: string, b: string) => {
   const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
@@ -42,19 +43,19 @@ export function ruleParse(text: string, w: RuleWorld): Command | null {
     : has(s, /\b(base|home|retreat|fall back)\b/) ? { type: "base" }
     : has(s, /\b(spawn|entrance|start)\b/) ? { type: "spawn" } : null;
 
-  const defend = has(s, /\b(build|place|construct|put|create|make|add|upgrade|improve|strengthen|reinforce|defend|defense|defence|protect|cover|tower|towers)\b/);
+  const defend = has(s, VERBS.defend);
   if (defend) {
     if (pad) return w.hasTower(pad) ? { kind: "upgrade", pad } : { kind: "build", pad };
     return w.best(hintFrom(s));
   }
-  if (has(s, /\b(attack|kill|shoot|fight|target|focus|hit)\b/)) {
+  if (has(s, VERBS.attack)) {
     const mode: FocusMode = has(s, /\b(strong|strongest|big|biggest|tank|tough)\b/) ? "strongest"
       : has(s, /\b(weak|weakest|small|smallest|low)\b/) ? "weakest"
       : has(s, /\b(first|leading|front|furthest)\b/) ? "first" : "nearest";
     return { kind: "attack", mode };
   }
-  if (has(s, /\b(stop|hold|stay|wait|halt|freeze)\b/)) return { kind: "hold" };
-  if (has(s, /\b(go|move|walk|run|head|retreat|return|back|fall)\b/) || place) return place ? { kind: "move", to: place } : null;
+  if (has(s, VERBS.hold)) return { kind: "hold" };
+  if (has(s, VERBS.move) || place) return place ? { kind: "move", to: place } : null;
   return null;
 }
 

@@ -4,5 +4,5 @@ export default defineConfig({
   base: "./",
   build: { target: "es2022" },
   worker: { format: "es" },
-  test: { environment: "node" },
+  test: { environment: "node", exclude: ["tests/e2e/**", "node_modules/**"] },
 });

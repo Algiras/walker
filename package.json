@@ -8,10 +8,17 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "gen:audio": "tsx scripts/gen-audio.ts",
+    "bench:llm": "tsx scripts/bench-llm.ts",
+    "bench:stt": "tsx scripts/bench-stt.ts"
   },
   "devDependencies": {
     "@webgpu/types": "^0.1.74",
+    "kokoro-js": "^1.2.1",
+    "onnxruntime-node": "^1.30.0",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",
     "vitest": "^5.0.1"
