@@ -14,8 +14,10 @@ import { $, announce, setText } from "./ui/dom";
 import { boardSize, nearestWithin } from "./ui/layout";
 import { PadMenu } from "./ui/pad-menu";
 import { Setup } from "./ui/setup";
+import { within } from "./ui/time";
 
 const params = new URLSearchParams(location.search);
+const GIVE_UP_MS = 30_000;
 
 const canvas = $<HTMLCanvasElement>("game");
 const ctx = canvas.getContext("2d")!;
@@ -191,7 +193,7 @@ async function advanceQueue() {
 async function interpret(text: string, t0: number, asrMs?: number): Promise<boolean> {
   thinking(true);
   try {
-    const d = await decider.decide(text, game);
+    const d = await within(GIVE_UP_MS, decider.decide(text, game), "Deciding");
     thinking(false);
     showResult();
     $("heard").textContent = `“${text}”`;
@@ -290,7 +292,7 @@ async function hear(pcm: Float32Array, endedAt: number) {
   if (!stt) return;
   thinking(true);
   try {
-    const r = await stt.transcribe(pcm);
+    const r = await within(GIVE_UP_MS, stt.transcribe(pcm), "Speech recognition");
     await handleText(r.text, endedAt, r.ms);
   } catch (e) {
     fail(e);

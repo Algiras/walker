@@ -4,6 +4,7 @@ import { generateMap } from "../src/game/map";
 import { Game } from "../src/game/sim";
 import { boardSize, nearestWithin } from "../src/ui/layout";
 import { menuItems, placeMenu } from "../src/ui/pad-menu";
+import { within } from "../src/ui/time";
 import { HeroVoice } from "../src/voice/hero-voice";
 import { Mic } from "../src/voice/mic";
 
@@ -236,6 +237,28 @@ describe("board size", () => {
 
   it("follows the width alone when the page is one column", () => {
     expect(boardSize({ stageW: 354, stageH: 100, chrome: 78, aspect, stacked: true }).w).toBe(354);
+  });
+});
+
+describe("giving up on stuck work", () => {
+  it("passes on the result of work that finishes in time", async () => {
+    vi.useFakeTimers();
+    const done = within(1000, new Promise<string>((resolve) => setTimeout(() => resolve("heard"), 200)), "Listening");
+    await vi.advanceTimersByTimeAsync(300);
+    await expect(done).resolves.toBe("heard");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("fails with what was being done when it takes too long", async () => {
+    vi.useFakeTimers();
+    const done = within(1000, new Promise<string>(() => {}), "Listening");
+    const failure = expect(done).rejects.toThrow("Listening took too long");
+    await vi.advanceTimersByTimeAsync(1100);
+    await failure;
+  });
+
+  it("passes on the failure of work that fails", async () => {
+    await expect(within(1000, Promise.reject(new Error("no device")), "Listening")).rejects.toThrow("no device");
   });
 });
 
