@@ -24,6 +24,7 @@ let stt: Stt | null = null;
 let mic: Mic | null = null;
 let shownLog = 0;
 const hero = new HeroVoice();
+hero.holdWhile = () => mic?.listening === true;
 const sayLine = (line: string | null) => { if (line) hero.say(line, 2); };
 
 function newGame(seed = Math.floor(Math.random() * 1e6)) {
@@ -367,16 +368,20 @@ loadBtn.addEventListener("click", async () => {
     voiceReady = true;
 
     try {
-      mic = await Mic.start();
-      mic.onUtterance = (u) => onUtterance(u.pcm, u.endedAt);
-      mic.onLevel = (rms, active) => {
+      const m = await Mic.start();
+      const vad = $<HTMLInputElement>("vad");
+      m.onUtterance = (u) => void onUtterance(u.pcm, u.endedAt);
+      m.ignoreInput = () => hero.speaking;
+      m.onLevel = (rms, active) => {
         $("level").style.width = `${Math.min(100, rms * 600)}%`;
         document.querySelector(".meter")!.classList.toggle("live", active);
       };
+      m.mode = vad.checked ? "vad" : "ptt";
+      vad.addEventListener("change", () => { m.mode = vad.checked ? "vad" : "ptt"; });
+      // A checkbox clicked with the mouse would keep focus, and Space would then toggle it instead of talking.
+      vad.addEventListener("click", (e) => { if (e.detail > 0) vad.blur(); });
       document.querySelector<HTMLElement>(".meter")!.hidden = false;
-      $<HTMLInputElement>("vad").addEventListener("change", (e) => {
-        mic!.mode = (e.target as HTMLInputElement).checked ? "vad" : "ptt";
-      });
+      mic = m;
       voiceStatus("Ready. Hold Space and speak.");
       setupNote("Ready. Hold Space and speak once the game starts.");
     } catch {
@@ -419,7 +424,8 @@ const unlockAudio = () => {
   hero.unlock();
   hero.prefetch(warmLines(game));
 };
-addEventListener("pointerdown", unlockAudio, { once: true });
+// A touch only counts as a gesture when it ends, so pointerup rather than pointerdown.
+addEventListener("pointerup", unlockAudio, { once: true });
 addEventListener("keydown", unlockAudio, { once: true });
 
 // --- hero buttons, map clicks, keyboard ---------------------------------------------------------
@@ -482,12 +488,26 @@ canvas.addEventListener("click", (e) => {
 
 addEventListener("keydown", (e) => {
   const typing = (e.target as HTMLElement).tagName === "INPUT";
-  if (e.code === "Space" && !e.repeat && !typing && !setupOpen) { e.preventDefault(); mic?.press(); }
-  else if (e.key === "Escape") { closeMenu(); if (setupOpen && gameStarted) closeSetup(); }
-  else if (!typing && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") { e.preventDefault(); press({ kind: "undo" }); }
-  else if (!typing && e.key.toLowerCase() === "p" && !e.metaKey && !e.ctrlKey) press({ kind: game.paused ? "resume" : "pause" });
+  if (e.key === "Escape") {
+    closeMenu();
+    if (setupOpen && gameStarted) closeSetup();
+    else if (typing) (e.target as HTMLElement).blur();
+    return;
+  }
+  if (setupOpen || typing) return;
+  // Space is claimed even when it repeats: an unclaimed repeat would click a focused button when the key is released.
+  if (e.code === "Space") { e.preventDefault(); if (!e.repeat) mic?.press(); }
+  else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") { e.preventDefault(); press({ kind: "undo" }); }
+  else if (e.key.toLowerCase() === "p" && !e.repeat && !e.metaKey && !e.ctrlKey) press({ kind: game.paused ? "resume" : "pause" });
 });
-addEventListener("keyup", (e) => { if (e.code === "Space") mic?.release(); });
+addEventListener("keyup", (e) => {
+  if (e.code !== "Space") return;
+  if (!setupOpen && (e.target as HTMLElement).tagName !== "INPUT") e.preventDefault();
+  mic?.release();
+});
+// Without these a key released after the window lost focus never arrives, and the microphone keeps recording.
+addEventListener("blur", () => mic?.release());
+document.addEventListener("visibilitychange", () => { if (document.hidden) mic?.release(); });
 
 $<HTMLFormElement>("typed").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -553,6 +573,15 @@ requestAnimationFrame(frame);
 
 if (import.meta.env.DEV) {
   Object.assign(window, {
-    walker: { get game() { return game; }, get hero() { return hero; }, get stt() { return stt; }, get decider() { return decider; }, get queue() { return queue; }, say: (t: string) => handleText(t, performance.now()) },
+    walker: {
+      get game() { return game; },
+      get hero() { return hero; },
+      get stt() { return stt; },
+      get decider() { return decider; },
+      get queue() { return queue; },
+      get mic() { return mic; },
+      set mic(m: Mic | null) { mic = m; },
+      say: (t: string) => handleText(t, performance.now()),
+    },
   });
 }
