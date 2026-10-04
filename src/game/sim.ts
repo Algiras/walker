@@ -23,6 +23,7 @@ type Undo =
 export const COSTS = { build: 50, upgrade: [40, 70], refund: 0.6 };
 export const MAX_LEVEL = COSTS.upgrade.length + 1;
 
+export type GameEvent = { kind: "wave"; n: number } | { kind: "baseHit" | "built" | "upgraded" | "sold" | "lost" };
 export interface Outcome { ok: boolean; message: string }
 export interface Assessment { verdict: "good" | "ok" | "poor"; note: string }
 
@@ -61,6 +62,9 @@ export class Game {
   speed: 1 | 2 = 1;
   last: Command | null = null;
   private history: Undo[] = [];
+  /** Called when something happens that is worth announcing: a wave arriving, a build finishing, the base being hit. */
+  announce: ((e: GameEvent) => void) | null = null;
+  private lastHitCall = -10;
   private nextId = 1;
   private nextNum = 1;
   private spawnQueue: { at: number; kind: Enemy["kind"] }[] = [];
@@ -247,6 +251,7 @@ export class Game {
       const t = this.addTower(c.pad);
       this.remember({ type: "build", pad: c.pad, cost: COSTS.build });
       this.say(`Built tower ${t.id} at ${c.pad}.`);
+      this.announce?.({ kind: "built" });
     } else if (c.kind === "upgrade") {
       const t = this.towerAt(c.pad)!;
       const cost = this.upgradeCost(t)!;
@@ -255,6 +260,7 @@ export class Game {
       t.level++;
       this.remember({ type: "upgrade", pad: c.pad, cost });
       this.say(`Upgraded tower ${t.id} at ${c.pad} to level ${t.level}.`);
+      this.announce?.({ kind: "upgraded" });
     } else if (c.kind === "sell") {
       const t = this.towerAt(c.pad)!;
       const value = this.sellValue(t);
@@ -262,6 +268,7 @@ export class Game {
       this.remember({ type: "sell", pad: c.pad, level: t.level, spent: t.spent, refund: value });
       this.towers = this.towers.filter((x) => x !== t);
       this.say(`Sold tower ${t.id} at ${c.pad} for ${value} gold.`);
+      this.announce?.({ kind: "sold" });
     }
   }
 
@@ -275,6 +282,7 @@ export class Game {
       this.spawnQueue.push({ at: this.time + i * 0.9, kind });
     }
     this.say(`Wave ${this.wave} incoming.`);
+    this.announce?.({ kind: "wave", n: this.wave });
   }
 
   private spawn(kind: Enemy["kind"]) {
@@ -315,9 +323,13 @@ export class Game {
       this.baseHp -= 1;
       e.hp = 0;
       this.say("An enemy reached the base!");
+      if (this.time - this.lastHitCall > 8) {
+        this.lastHitCall = this.time;
+        this.announce?.({ kind: "baseHit" });
+      }
     }
     this.enemies = this.enemies.filter((e) => e.hp > 0 && e.d < this.total);
-    if (this.baseHp <= 0) { this.state = "lost"; this.say("The base has fallen."); return; }
+    if (this.baseHp <= 0) { this.state = "lost"; this.say("The base has fallen."); this.announce?.({ kind: "lost" }); return; }
 
     for (const t of this.towers) {
       t.cd -= dt;

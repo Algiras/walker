@@ -30,3 +30,11 @@ export async function fetchCached(url: string, onProgress?: Progress): Promise<U
   try { await cache.put(url, new Response(bytes)); } catch (e) { console.warn("model cache write failed", e); }
   return bytes;
 }
+
+export async function isCached(url: string): Promise<boolean> {
+  try {
+    return !!(await (await caches.open(CACHE)).match(url));
+  } catch {
+    return false;
+  }
+}

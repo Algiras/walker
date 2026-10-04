@@ -6,6 +6,7 @@ import { createTev1Picker, Tokenizer } from "./tev1";
 
 export const TEV1_REPO = "goldenfox/tev1-0.8b-decision-onnx";
 const BASE = `https://huggingface.co/${TEV1_REPO}/resolve/main/`;
+export const TEV1_DATA_URL = BASE + "model.onnx.data";
 
 /** Loads Together's Tev1 0.8B decision model (about 770 MB, cached) on WebGPU. Throws if WebGPU is unavailable. */
 export async function loadPicker(onProgress: Progress): Promise<PickFn> {

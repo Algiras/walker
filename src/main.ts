@@ -3,13 +3,15 @@ import { Game, Order } from "./game/sim";
 import { render } from "./game/render";
 import { Command, describeCommand } from "./game/commands";
 import { Mic } from "./voice/mic";
-import { loadStt, Stt } from "./voice/stt";
-import { loadPicker } from "./voice/llm";
+import { loadStt, Stt, sttCached } from "./voice/stt";
+import { loadPicker, TEV1_DATA_URL } from "./voice/llm";
 import { Decider, PickDecider } from "./voice/decide";
 import { RuleDecider } from "./voice/rules";
 import { examplesFor, plain } from "./voice/examples";
 import { splitCommands } from "./voice/verbs";
-import { Progress } from "./voice/cache";
+import { isCached, Progress } from "./voice/cache";
+import { HeroVoice } from "./voice/hero-voice";
+import { calloutFor, CONFIRM, eventLine, refusalCallout, warmLines } from "./voice/callouts";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const params = new URLSearchParams(location.search);
@@ -21,6 +23,8 @@ let decider: Decider = new RuleDecider();
 let stt: Stt | null = null;
 let mic: Mic | null = null;
 let shownLog = 0;
+const hero = new HeroVoice();
+const sayLine = (line: string | null) => { if (line) void hero.say(line, 2); };
 
 function newGame(seed = Math.floor(Math.random() * 1e6)) {
   game = new Game(generateMap(seed));
@@ -32,6 +36,8 @@ function newGame(seed = Math.floor(Math.random() * 1e6)) {
   $("menu").hidden = true;
   pending = null;
   clearQueue();
+  game.announce = (e) => void hero.say(eventLine(e), 1);
+  hero.prefetch(warmLines(game));
   $("decider").textContent = `Decision engine: ${decider.name}`;
   showExamples();
 }
@@ -99,8 +105,10 @@ function advise(c: Command) {
 
 function run(c: Command) {
   advise(c);
+  const line = calloutFor(c, game);
   const out = game.command(c);
   log(out.message);
+  sayLine(out.ok ? line : refusalCallout(out.message));
   $("decision").textContent = out.ok ? `${describeCommand(c)}` : out.message;
   return out;
 }
@@ -173,11 +181,13 @@ async function interpret(text: string, t0: number, asrMs?: number): Promise<bool
       game.hero.shake = 0.35;
       $("decision").textContent = `${d.note} Did you mean “${describeCommand(d.command)}”? Say yes to confirm.`;
       log(`Not sure (${pct}): ${describeCommand(d.command)}?`);
+      sayLine(CONFIRM);
       advise(d.command);
     } else {
       game.hero.shake = 0.6;
       $("decision").textContent = `${d.note ?? "Not understood."}  ·  ${d.trace}`;
       log(d.note ?? "Not understood.");
+      sayLine(refusalCallout(d.note ?? "I did not catch that."));
     }
     const rows: [string, string][] = [];
     if (asrMs !== undefined) rows.push(["Speech to text", `${asrMs.toFixed(0)} ms`]);
@@ -247,7 +257,7 @@ async function onUtterance(pcm: Float32Array, endedAt: number) {
   }
 }
 
-// --- loading the voice stack: each model is a skeleton track that fills as it arrives -----------
+// --- setting up the voice stack before the game starts ------------------------------------------
 
 type Step = "stt" | "llm";
 
@@ -258,6 +268,8 @@ function stepProgress(step: Step): Progress {
   const fill = track.querySelector<HTMLElement>("i")!;
   const files = new Map<string, { got: number; total: number }>();
   let best = 0;
+  li.classList.remove("cached");
+  track.classList.add("skeleton");
   state.textContent = "Starting";
   return (file, got, total) => {
     files.set(file, { got, total: total || got });
@@ -272,53 +284,136 @@ function stepProgress(step: Step): Progress {
 
 function stepEnd(step: Step, outcome: "done" | "failed", text: string) {
   const li = $(`step-${step}`);
+  li.classList.remove("cached");
   li.classList.add(outcome);
+  li.querySelector(".sk-track")!.classList.remove("skeleton");
   li.querySelector<HTMLElement>(".step-state")!.textContent = text;
   if (outcome === "done") li.querySelector<HTMLElement>("i")!.style.width = "100%";
 }
 
-$("load").addEventListener("click", async () => {
-  const btn = $<HTMLButtonElement>("load");
-  btn.disabled = true;
-  btn.textContent = "Loading…";
-  $("steps").hidden = false;
-  const status = (m: string) => ($("status").textContent = m);
+const setup = $("setup");
+const startBtn = $<HTMLButtonElement>("start");
+const loadBtn = $<HTMLButtonElement>("load");
+let setupOpen = !params.has("start");
+let voiceReady = false;
+let gameStarted = !setupOpen;
+const voiceStatus = (m: string) => ($("status").textContent = m);
+const setupNote = (m: string) => ($("setup-note").textContent = m);
+
+function renderSetupButtons() {
+  loadBtn.hidden = voiceReady;
+  startBtn.textContent = voiceReady ? (gameStarted ? "Back to the game" : "Start game") : gameStarted ? "Back to the game" : "Start without voice";
+  startBtn.classList.toggle("primary", voiceReady);
+}
+
+async function openSetup() {
+  setupOpen = true;
+  setup.hidden = false;
+  renderSetupButtons();
+  if (voiceReady) return;
+
+  const gpu = "gpu" in navigator;
+  const [llmHit, sttHit] = await Promise.all([isCached(TEV1_DATA_URL), sttCached()]);
+  for (const [step, hit] of [["stt", sttHit], ["llm", llmHit]] as const) {
+    const li = $(`step-${step}`);
+    if (li.classList.contains("done")) continue;
+    li.classList.toggle("cached", hit);
+    li.querySelector<HTMLElement>(".step-state")!.textContent = hit ? "Downloaded" : "Not downloaded";
+  }
+  if (!gpu) {
+    loadBtn.disabled = true;
+    setupNote("WebGPU is not available in this browser, so voice is off. You can still play with the buttons, the map and typed commands.");
+  } else if (sttHit && llmHit) {
+    loadBtn.textContent = "Load models";
+    setupNote("Both models are already downloaded. Loading takes a few seconds.");
+  } else {
+    loadBtn.textContent = "Download and load models";
+    setupNote(sttHit || llmHit ? "Part of the download is already cached." : "Downloads about 1.3 GB once, then it is cached in this browser.");
+  }
+  (voiceReady ? startBtn : loadBtn).focus();
+}
+
+function closeSetup() {
+  setupOpen = false;
+  gameStarted = true;
+  setup.hidden = true;
+  canvas.focus();
+}
+
+startBtn.addEventListener("click", closeSetup);
+$("setupOpen").addEventListener("click", () => void openSetup());
+
+loadBtn.addEventListener("click", async () => {
+  loadBtn.disabled = true;
+  loadBtn.textContent = "Loading…";
+  startBtn.disabled = true;
   let step: Step = "stt";
   try {
-    status("Downloading the models. They are cached for next time.");
-    const sttProgress = stepProgress("stt");
-    stt = await loadStt(sttProgress, log);
+    setupNote("Downloading and loading. The game is waiting for you.");
+    stt = await loadStt(stepProgress("stt"), log);
     stepEnd("stt", "done", stt.device);
 
     step = "llm";
     decider = new PickDecider("Tev1 0.8B", await loadPicker(stepProgress("llm")));
     stepEnd("llm", "done", "webgpu");
     $("decider").textContent = `Decision engine: ${decider.name}`;
+    voiceReady = true;
 
     try {
       mic = await Mic.start();
-      document.querySelector<HTMLElement>(".meter")!.hidden = false;
       mic.onUtterance = (u) => onUtterance(u.pcm, u.endedAt);
       mic.onLevel = (rms, active) => {
         $("level").style.width = `${Math.min(100, rms * 600)}%`;
         document.querySelector(".meter")!.classList.toggle("live", active);
       };
+      document.querySelector<HTMLElement>(".meter")!.hidden = false;
       $<HTMLInputElement>("vad").addEventListener("change", (e) => {
         mic!.mode = (e.target as HTMLInputElement).checked ? "vad" : "ptt";
       });
-      status("Ready. Hold Space and speak.");
+      voiceStatus("Ready. Hold Space and speak.");
+      setupNote("Ready. Hold Space and speak once the game starts.");
     } catch {
-      status("Models ready, but the microphone is unavailable. You can still type commands.");
+      voiceStatus("Models ready, but the microphone is unavailable. You can still type commands.");
+      setupNote("Models are ready, but the microphone is unavailable. You can still type commands.");
     }
-    btn.textContent = "Voice models loaded";
-    setTimeout(() => ($("steps").hidden = true), 1800);
   } catch (e) {
     stepEnd(step, "failed", "Failed");
-    status(`Failed: ${(e as Error).message}`);
-    btn.disabled = false;
-    btn.textContent = "Try again";
+    setupNote(`Failed: ${(e as Error).message}`);
+    loadBtn.disabled = false;
+    loadBtn.textContent = "Try again";
+  } finally {
+    startBtn.disabled = false;
+    renderSetupButtons();
+    if (voiceReady) startBtn.focus();
   }
 });
+
+// --- the hero's own voice: pre-recorded lines, switched on by the first click or key press -------
+
+const wantVoice = $<HTMLInputElement>("want-voice");
+const heroToggle = $<HTMLButtonElement>("heroVoice");
+const showHeroVoice = () => {
+  wantVoice.checked = hero.enabled;
+  heroToggle.textContent = hero.enabled ? "🔊 Hero voice" : "🔇 Hero voice";
+  heroToggle.classList.toggle("on", hero.enabled);
+};
+const setHeroVoice = (on: boolean) => {
+  hero.setEnabled(on);
+  showHeroVoice();
+  if (on) {
+    hero.unlock();
+    void hero.say("Standing by.", 2);
+  }
+};
+wantVoice.addEventListener("change", () => setHeroVoice(wantVoice.checked));
+heroToggle.addEventListener("click", () => setHeroVoice(!hero.enabled));
+showHeroVoice();
+const unlockAudio = () => {
+  hero.unlock();
+  hero.prefetch(warmLines(game));
+};
+addEventListener("pointerdown", unlockAudio, { once: true });
+addEventListener("keydown", unlockAudio, { once: true });
 
 // --- hero buttons, map clicks, keyboard ---------------------------------------------------------
 
@@ -380,8 +475,8 @@ canvas.addEventListener("click", (e) => {
 
 addEventListener("keydown", (e) => {
   const typing = (e.target as HTMLElement).tagName === "INPUT";
-  if (e.code === "Space" && !e.repeat && !typing) { e.preventDefault(); mic?.press(); }
-  else if (e.key === "Escape") closeMenu();
+  if (e.code === "Space" && !e.repeat && !typing && !setupOpen) { e.preventDefault(); mic?.press(); }
+  else if (e.key === "Escape") { closeMenu(); if (setupOpen && gameStarted) closeSetup(); }
   else if (!typing && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") { e.preventDefault(); press({ kind: "undo" }); }
   else if (!typing && e.key.toLowerCase() === "p" && !e.metaKey && !e.ctrlKey) press({ kind: game.paused ? "resume" : "pause" });
 });
@@ -433,10 +528,12 @@ wide.addEventListener("change", syncExamples);
 syncExamples();
 
 newGame(params.get("seed") ? Number(params.get("seed")) : undefined);
+setup.hidden = !setupOpen;
+if (setupOpen) void openSetup();
 let last = performance.now();
 let acc = 0;
 function frame(now: number) {
-  acc += Math.min(0.25, (now - last) / 1000) * game.speed;
+  if (!setupOpen) acc += Math.min(0.25, (now - last) / 1000) * game.speed;
   last = now;
   while (acc >= 1 / 30) { game.step(1 / 30); acc -= 1 / 30; }
   render(ctx, game);
@@ -449,6 +546,6 @@ requestAnimationFrame(frame);
 
 if (import.meta.env.DEV) {
   Object.assign(window, {
-    walker: { get game() { return game; }, get stt() { return stt; }, get decider() { return decider; }, get queue() { return queue; }, say: (t: string) => handleText(t, performance.now()) },
+    walker: { get game() { return game; }, get hero() { return hero; }, get stt() { return stt; }, get decider() { return decider; }, get queue() { return queue; }, say: (t: string) => handleText(t, performance.now()) },
   });
 }

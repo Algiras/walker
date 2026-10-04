@@ -8,6 +8,10 @@ import { cleanTranscript, enemyNumber, splitCommands, gateOptions, hasEvidence, 
 import { settle } from "../src/voice/settle";
 import { PickDecider } from "../src/voice/decide";
 import { COSTS } from "../src/game/sim";
+import { allLines, calloutFor, eventLine, refusalCallout } from "../src/voice/callouts";
+import { existsSync, readFileSync } from "node:fs";
+import { Command } from "../src/game/commands";
+import type { GameEvent } from "../src/game/sim";
 
 describe("map generation", () => {
   it("is deterministic per seed", () => {
@@ -400,6 +404,80 @@ describe("undo and new commands", () => {
     g.command({ kind: "resume" });
     g.command({ kind: "hold" });
     expect(g.command({ kind: "repeat" }).message).toMatch(/Holding/);
+  });
+});
+
+describe("hero callouts", () => {
+  const g = new Game(generateMap(7));
+  g.addTower(g.map.pads[2].name);
+
+  it("says what it is about to do, tersely", () => {
+    expect(calloutFor({ kind: "build", pad: "Alpha" }, g)).toBe("Building at Alpha.");
+    expect(calloutFor({ kind: "upgrade", pad: "Charlie" }, g)).toBe("Upgrading tower three.");
+    expect(calloutFor({ kind: "sell", pad: "Charlie" }, g)).toBe("Selling tower three.");
+    expect(calloutFor({ kind: "move", to: { type: "pad", name: "Bravo" } }, g)).toBe("Moving to Bravo.");
+    expect(calloutFor({ kind: "move", to: { type: "base" } }, g)).toBe("Falling back.");
+    expect(calloutFor({ kind: "attack", mode: "number", n: 4 }, g)).toBe("Engaging target four.");
+    expect(calloutFor({ kind: "attack", mode: "rank", n: 2 }, g)).toBe("Engaging the second target.");
+    expect(calloutFor({ kind: "hold" }, g)).toBe("Holding position.");
+  });
+
+  it("repeats the callout of the command being repeated", () => {
+    const h = new Game(generateMap(7));
+    h.last = { kind: "patrol" };
+    expect(calloutFor({ kind: "repeat" }, h)).toBe("Patrolling.");
+    expect(calloutFor({ kind: "repeat" }, new Game(generateMap(7)))).toBeNull();
+  });
+
+  it("refuses in the same voice", () => {
+    expect(refusalCallout("Not enough gold: a tower costs 50, you have 10.")).toBe("Insufficient funds.");
+    expect(refusalCallout("There is no tower at Alpha to sell.")).toBe("Negative. No tower there.");
+    expect(refusalCallout("Pad 3 Charlie already has a tower.")).toBe("Negative. Pad occupied.");
+    expect(refusalCallout("I did not catch that. Say it again?")).toBe("Say again?");
+    expect(refusalCallout("something else")).toBe("Negative.");
+  });
+
+  it("announces game events, with the base-hit warning rate limited", () => {
+    const h = new Game(generateMap(3));
+    const heard: string[] = [];
+    h.announce = (e) => heard.push(eventLine(e));
+    for (let i = 0; i < 30 * 600 && h.state === "playing"; i++) h.step(1 / 30);
+    expect(heard).toContain("Wave one incoming.");
+    expect(heard).toContain("Base destroyed.");
+    expect(heard.filter((l) => l === "Base under attack.").length).toBeLessThan(heard.length);
+  });
+
+  it("only ever says lines from the recorded vocabulary", () => {
+    const lines = new Set(allLines());
+    const g2 = new Game(generateMap(7));
+    for (const p of g2.map.pads) g2.addTower(p.name, 2);
+    const commands: Command[] = [
+      { kind: "hold" }, { kind: "pause" }, { kind: "resume" }, { kind: "patrol" }, { kind: "undo" }, { kind: "nextwave" },
+      { kind: "speed", fast: true }, { kind: "speed", fast: false },
+      ...(["left", "right", "up", "down"] as const).map((dir): Command => ({ kind: "nudge", dir })),
+      ...(["nearest", "strongest", "weakest", "first", "last"] as const).map((mode): Command => ({ kind: "attack", mode })),
+      ...Array.from({ length: 60 }, (_, i): Command => ({ kind: "attack", mode: "number", n: i })),
+      ...Array.from({ length: 10 }, (_, i): Command => ({ kind: "attack", mode: "rank", n: i + 1 })),
+      { kind: "move", to: { type: "base" } }, { kind: "move", to: { type: "spawn" } }, { kind: "move", to: { type: "point", x: 3, y: 3 } },
+      ...g2.map.pads.flatMap((p): Command[] => [{ kind: "build", pad: p.name }, { kind: "upgrade", pad: p.name }, { kind: "sell", pad: p.name }, { kind: "move", to: { type: "pad", name: p.name } }]),
+    ];
+    for (const c of commands) {
+      const line = calloutFor(c, g2);
+      if (line) expect(lines.has(line), `no recording for "${line}" (${JSON.stringify(c)})`).toBe(true);
+    }
+    for (const e of [...Array.from({ length: 60 }, (_, n): GameEvent => ({ kind: "wave", n })), ...(["baseHit", "built", "upgraded", "sold", "lost"] as const).map((kind): GameEvent => ({ kind }))]) {
+      expect(lines.has(eventLine(e)), `no recording for "${eventLine(e)}"`).toBe(true);
+    }
+    for (const m of ["Not enough gold: a tower costs 50", "There is no tower at A", "Pad 3 Charlie already has a tower.", "maximum level", "no enemies", "Nothing to undo.", "still arriving", "I did not catch that", "other"]) {
+      expect(lines.has(refusalCallout(m)), `no recording for "${refusalCallout(m)}"`).toBe(true);
+    }
+  });
+
+  it("has a recording file for every line once they have been generated", () => {
+    const file = new URL("../public/voice/manifest.json", import.meta.url).pathname;
+    if (!existsSync(file)) return;
+    const recorded = new Set(Object.keys(JSON.parse(readFileSync(file, "utf8")).lines));
+    for (const line of allLines()) expect(recorded.has(line), `not recorded: "${line}"`).toBe(true);
   });
 });
 

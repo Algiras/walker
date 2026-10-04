@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "gen:audio": "tsx scripts/gen-audio.ts",
+    "gen:voice": "tsx scripts/gen-voice.ts",
     "bench:llm": "tsx scripts/bench-llm.ts",
     "deploy": "bash scripts/deploy.sh"
   },

@@ -9,6 +9,16 @@ export interface Stt {
 
 export const STT_REPO = "onnx-community/whisper-small.en";
 
+/** Is Whisper already in the browser cache that transformers.js keeps? */
+export async function sttCached(): Promise<boolean> {
+  try {
+    const keys = await (await caches.open("transformers-cache")).keys();
+    return keys.some((r) => r.url.includes("whisper-small.en") && r.url.includes("encoder_model"));
+  } catch {
+    return false;
+  }
+}
+
 /** WebGPU first: fp16 encoder where the GPU supports it, fp32 otherwise, then plain wasm. */
 const ATTEMPTS: { device: "webgpu" | "wasm"; dtype: string | Record<string, string> }[] = [
   { device: "webgpu", dtype: { encoder_model: "fp16", decoder_model_merged: "q4" } },

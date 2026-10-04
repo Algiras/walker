@@ -8,7 +8,7 @@ Command a hero in a tower-defense map with your voice. Speech recognition and co
 - **Decisions:** Together's [Tev1 0.8B](https://huggingface.co/togethercomputer/Tev1-0.8B-experimental), an open decision model in the spirit of Jev, via the [ONNX export](https://huggingface.co/goldenfox/tev1-0.8b-decision-onnx) on onnxruntime-web (WebGPU). It never writes text: the game lists every legal action as a lettered option and the model's next-token logits pick one. A keyword gate in front of it keeps small-model confusions out ("go" means movement, "build" means defense).
 - **Game:** a seeded random map (path plus numbered, named build pads) and a hero you command by voice, buttons or clicks.
 
-Needs a Chromium-based browser with WebGPU. The first voice load downloads about 1.3 GB (Whisper small.en about 520 MB, Tev1 about 770 MB) and caches it. Without WebGPU the buttons, clicks and typed commands still work through a keyword fallback.
+Needs a Chromium-based browser with WebGPU for voice. On the first visit a **setup screen** comes before the game: it shows what is already downloaded, downloads and loads the two models (about 1.3 GB once: Whisper small.en about 520 MB, Tev1 about 770 MB, cached afterwards), and only then starts the game, so waves do not run while you wait. You can also start without voice, and reopen the screen later with **Set up voice** (the game pauses while it is open). Without WebGPU the buttons, clicks and typed commands still work through a keyword fallback. `?start=1` skips the screen.
 
 ## Controls
 
@@ -53,6 +53,12 @@ The confidence is how decisively the best action beats the runner-up, so several
 
 Also guarded: "build at Charlie" when Charlie already has a tower is refused with a hint, never turned into an upgrade (and the reverse). One action per sentence.
 
+## The hero answers aloud
+
+Like a unit acknowledging an order in Command & Conquer, the hero says what it is about to do in a deep male voice: "Building at Charlie.", "Upgrading tower three.", "Engaging target four.", "Insufficient funds.", "Say again?", and game events such as "Wave two incoming." and "Base under attack." Replies to your orders cut off whatever is playing; game events never interrupt.
+
+The voice is **pre-recorded**, not synthesised in the page: everything the hero can say is a short fixed line (`allLines()` in `src/voice/callouts.ts`: command acknowledgements, refusals, pad names, tower and target numbers, wave numbers). `npm run gen:voice` records each line once with Kokoro (`am_onyx`, the deepest of its male voices), then ffmpeg trims the silence, lowers the pitch about 8%, adds low-end weight, compresses lightly and encodes 64 kbps mono MP3. The 163 files are about 3 MB in `public/voice/`, loaded in the background and played through the Web Audio API. It works with typed and clicked commands too, needs no model and no WebGPU, and a unit test fails if the game can say a line that has no recording. Toggle it with the **Hero voice** button or in the setup screen; the choice is remembered.
+
 ## How a command flows
 
 ```
@@ -70,13 +76,15 @@ Speech to text, one decision, then the action: `(state, text) → new state`. Th
 | `src/voice/verbs.ts`, `guard.ts`, `fuzzy.ts` | keyword gate (verbs, named pad, area and goal words), transcript fixes such as cell to sell, build/upgrade guard |
 | `src/voice/rules.ts` | keyword fallback before the models load |
 | `src/voice/mic.ts` | capture, push-to-talk and a simple energy VAD |
+| `src/voice/callouts.ts`, `hero-voice.ts` | what the hero says, the full list of recorded lines, and the Web Audio player |
 
 ## Tests
 
 ```bash
 npm install
 npm test            # unit tests: map, simulation, economy, undo, keyword rules and gate
-npm run gen:audio   # records spoken fixtures with Kokoro (cached; only missing clips are synthesised)
+npm run gen:audio   # records spoken test fixtures with Kokoro (cached; only missing clips are synthesised)
+npm run gen:voice   # records the hero's lines to public/voice/ (needs ffmpeg; cached, --force to redo)
 npm run test:e2e    # spoken fixtures → Whisper → Tev1 → expected command in a given game state
 npm run bench:llm   # decision accuracy on the ground-truth text
 ```
@@ -115,5 +123,5 @@ Code: MIT. Models are fetched from the Hugging Face Hub at runtime and are not p
 
 - Whisper small.en: MIT, OpenAI. ONNX conversion by [onnx-community](https://huggingface.co/onnx-community/whisper-small.en).
 - Tev1 0.8B: by Together AI on Qwen3.5-0.8B (Apache-2.0). The fine-tune's own license is still being finalised upstream; check [the model card](https://huggingface.co/togethercomputer/Tev1-0.8B-experimental) before redistributing. ONNX export by [goldenfox](https://huggingface.co/goldenfox/tev1-0.8b-decision-onnx).
-- Kokoro-82M (Apache-2.0) is used only to record the test fixtures.
+- Kokoro-82M (Apache-2.0) recorded the test fixtures and the hero's voice lines at build time; it is not loaded by the page.
 - Wix Madefor Text and Display: SIL Open Font License 1.1, Wix.com, via Google Fonts (Latin subsets, self-hosted in `public/fonts/`).

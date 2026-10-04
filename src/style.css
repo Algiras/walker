@@ -88,6 +88,7 @@ button.on { background: var(--accent); color: var(--accent-ink); border-color: t
 .ctl button { padding: 5px 2px; font-size: 12.5px; white-space: nowrap; }
 .ctl.attack { grid-template-columns: auto repeat(5, 1fr); align-items: center; }
 .ctl.attack span { font-size: 12px; color: var(--muted); margin-right: 2px; }
+.ctl.two { grid-template-columns: 1fr 1fr; }
 .ctl.game { grid-template-columns: repeat(4, 1fr) 1.7fr 1fr 1.3fr; }
 
 /* inputs */
@@ -100,7 +101,7 @@ form { display: flex; gap: var(--sp1); }
 .steps[hidden] { display: none; }
 .step-top { display: flex; justify-content: space-between; align-items: baseline; font-weight: 600; }
 .step-state { font-weight: 500; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.sk-track { position: relative; height: 10px; border-radius: 5px; margin-top: var(--sp1); overflow: hidden; }
+.sk-track { position: relative; height: 10px; border-radius: 5px; margin-top: var(--sp1); overflow: hidden; background: var(--sk1); }
 .sk-track > i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent); border-radius: 5px; transition: width .25s ease; }
 .step-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
 .steps li.done .sk-track { animation: none; background: var(--sk1); }
@@ -111,6 +112,21 @@ form { display: flex; gap: var(--sp1); }
 .meter { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: var(--sp2); }
 .meter i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .06s linear; }
 .meter.live i { background: var(--warn); }
+
+/* setup dialog */
+.scrim { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: var(--sp3); background: rgba(22, 45, 61, .55); overflow: auto; }
+.scrim[hidden] { display: none; }
+.dialog { width: min(480px, 100%); background: var(--card); border-radius: 12px; padding: var(--sp4); box-shadow: 0 16px 48px rgba(22, 45, 61, .35); }
+.dialog-title { font: 700 20px/26px var(--font-display); text-transform: none; letter-spacing: -.01em; color: var(--ink); margin: 0 0 var(--sp1); }
+.dialog-text { margin: 0; color: var(--muted); }
+.dialog .steps { margin-top: var(--sp3); }
+.dialog-check { margin-top: var(--sp2); font-size: 13px; color: var(--ink); }
+.dialog .note { min-height: 18px; margin-top: var(--sp2); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: var(--sp2); margin-top: var(--sp3); flex-wrap: wrap; }
+.dialog-actions button { padding: 9px var(--sp3); }
+.dialog-actions button[hidden] { display: none; }
+.steps li.cached .step-state { color: var(--ok); }
+.steps li.cached .sk-track > i { width: 100%; background: var(--ok); }
 
 /* skeletons */
 .skeleton { background: linear-gradient(90deg, var(--sk1) 25%, var(--sk2) 37%, var(--sk1) 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
