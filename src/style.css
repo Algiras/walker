@@ -122,6 +122,12 @@ form { display: flex; gap: var(--sp1); }
 .dialog .steps { margin-top: var(--sp3); }
 .dialog-check { margin-top: var(--sp2); font-size: 13px; color: var(--ink); }
 .dialog .note { min-height: 18px; margin-top: var(--sp2); }
+.about { margin-top: var(--sp2); font-size: 12.5px; }
+.about summary { cursor: pointer; font: 500 13px/18px var(--font-text); text-transform: none; letter-spacing: 0; color: var(--accent); justify-content: flex-start; gap: 6px; }
+.about summary::after { content: none; }
+.about ul { margin: var(--sp1) 0 0; padding-left: 18px; color: var(--muted); display: grid; gap: 6px; }
+.about b { color: var(--ink); font-weight: 600; }
+.about a { color: var(--accent); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: var(--sp2); margin-top: var(--sp3); flex-wrap: wrap; }
 .dialog-actions button { padding: 9px var(--sp3); }
 .dialog-actions button[hidden] { display: none; }

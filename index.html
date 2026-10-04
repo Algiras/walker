@@ -12,6 +12,7 @@
     <h1>Walker</h1>
     <span class="sub">Talk to your hero. Speech and decisions run in your browser.</span>
     <span class="spacer"></span>
+    <a class="link" href="https://github.com/Algiras/walker#models-and-where-they-come-from" target="_blank" rel="noopener">About the models</a>
     <a class="link" href="https://github.com/Algiras/walker" target="_blank" rel="noopener">GitHub</a>
     <button id="newmap">New map</button>
   </header>
@@ -118,6 +119,16 @@
       </ol>
       <label class="check dialog-check"><input type="checkbox" id="want-voice" checked /> The hero answers aloud in a deep voice (recorded, about 3 MB)</label>
       <p class="note" id="setup-note"></p>
+      <details class="about">
+        <summary>About these models</summary>
+        <ul>
+          <li><b>Speech to text:</b> Whisper small.en by OpenAI (MIT), ONNX conversion by onnx-community. Downloaded from <a href="https://huggingface.co/onnx-community/whisper-small.en" target="_blank" rel="noopener">huggingface.co/onnx-community/whisper-small.en</a>.</li>
+          <li><b>Decisions:</b> Tev1 0.8B by Together AI, fine-tuned from Qwen3.5-0.8B (Apache-2.0); the fine-tune's own license is still being finalized upstream. ONNX export by goldenfox. Downloaded from <a href="https://huggingface.co/goldenfox/tev1-0.8b-decision-onnx" target="_blank" rel="noopener">huggingface.co/goldenfox/tev1-0.8b-decision-onnx</a>.</li>
+          <li><b>Hero voice:</b> synthetic speech recorded in advance with Kokoro-82M (Apache-2.0). It ships with this site; no voice model runs in your browser.</li>
+          <li><b>Where it goes:</b> your browser downloads the models straight from huggingface.co, and the ONNX runtime (WebAssembly) from cdn.jsdelivr.net, so those services see the request like any download. Models are cached in your browser. Your voice, your commands and the game never leave your device.</li>
+          <li><b>As is:</b> these are third-party, partly experimental models. They can mishear you or misjudge a command, and their authors are not affiliated with this project.</li>
+        </ul>
+      </details>
       <div class="dialog-actions">
         <button id="start">Start without voice</button>
         <button id="load" class="primary">Download and load models</button>

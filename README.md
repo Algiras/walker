@@ -117,6 +117,20 @@ GitHub Pages serves the `gh-pages` branch. Pages cannot send COOP/COEP headers, 
 
 The UI follows Wix Design System conventions: Wix Madefor type (self-hosted, no font requests to third parties), the WDS blue and neutral palette behind named tokens, 6px spacing steps, 8px cards, pill buttons, and light and dark themes. Loading uses skeleton placeholders instead of spinners: each model is a skeleton track that fills as it downloads, and the command panel shows skeleton lines while a command is being worked out (only if it takes noticeably long). Skeletons stay still for people who prefer reduced motion.
 
+## Models and where they come from
+
+Walker runs three pieces of third-party AI. None of them is stored in this repository or on the site's own server.
+
+| What | Model | Made by | License | Your browser downloads it from |
+|---|---|---|---|---|
+| Speech to text | [Whisper small.en](https://huggingface.co/onnx-community/whisper-small.en) (ONNX conversion by onnx-community) | OpenAI | MIT | `huggingface.co/onnx-community/whisper-small.en` (about 520 MB) |
+| Decisions | [Tev1 0.8B](https://huggingface.co/goldenfox/tev1-0.8b-decision-onnx) (ONNX export by goldenfox) | Together AI, fine-tuned from Qwen3.5-0.8B | Qwen3.5 is Apache-2.0; the Tev1 fine-tune's license is still being finalized upstream | `huggingface.co/goldenfox/tev1-0.8b-decision-onnx` (about 770 MB) |
+| Hero voice | Kokoro-82M, voice `am_onyx` | hexgrad | Apache-2.0 | not downloaded: the lines were recorded ahead of time and ship with the site (about 3 MB) |
+
+**Where your data goes.** Speech recognition and decisions run in your browser, on your device. Your voice, your typed commands and your game are never sent anywhere, and there is no backend, analytics or account. The only network requests besides the site itself are the model downloads from `huggingface.co` and the ONNX Runtime WebAssembly files from `cdn.jsdelivr.net`; like any download, those services can see the request and your IP address. The models are kept in your browser's cache storage after the first download, and clearing the site's data removes them.
+
+**Use them knowingly.** The models are third-party, partly experimental and used as is, and the ONNX files are community conversions made by people who are not part of this project. They can mishear you or misjudge a command (which is why the game asks before acting on a low-confidence guess), and Whisper can invent words from near-silence. None of the model authors endorse or are affiliated with Walker. Check each model's license before redistributing it or using it commercially, in particular Tev1's, which is not final. The hero's lines are synthetic speech, and the "unit acknowledging an order" style is only inspired by classic strategy games; Command & Conquer is a trademark of its owner and Walker is not affiliated with it.
+
 ## Credits and licenses
 
 Code: MIT. Models are fetched from the Hugging Face Hub at runtime and are not part of this repository:
