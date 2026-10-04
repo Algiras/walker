@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Walker</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Walker</h1>
+    <span class="sub">Talk to your hero. Speech and decisions run entirely in your browser.</span>
+    <span class="spacer"></span>
+    <button id="newmap">New map</button>
+  </header>
+  <main>
+    <section class="stage">
+      <div class="hud">
+        <span>Wave <b id="wave">0</b></span>
+        <span>Gold <b id="gold">0</b></span>
+        <span>Base <b id="hp">0</b></span>
+        <span>Hero: <b id="order">idle</b></span>
+        <span class="seed">seed <b id="seed"></b></span>
+      </div>
+      <canvas id="game"></canvas>
+      <div id="banner" hidden></div>
+    </section>
+    <aside>
+      <div class="card" id="voice">
+        <h2>Voice</h2>
+        <p class="hint">Hold <kbd>Space</kbd> and speak, e.g. “build a tower at Bravo”, “attack the strongest one”, “go back to base”.</p>
+        <div class="row">
+          <button id="load" class="primary">Load voice models</button>
+          <label><input type="checkbox" id="vad" /> auto-detect speech</label>
+        </div>
+        <div class="bars" id="bars"></div>
+        <div class="meter"><i id="level"></i></div>
+        <p class="note" id="status">Not loaded. First load downloads about 700 MB, then it is cached.</p>
+      </div>
+      <div class="card">
+        <h2>Last command</h2>
+        <div id="heard" class="heard">–</div>
+        <div id="decision" class="decision">–</div>
+        <table id="timing"><tbody></tbody></table>
+      </div>
+      <div class="card">
+        <h2>Type instead</h2>
+        <form id="typed"><input id="text" autocomplete="off" placeholder="go to Alpha" /><button>Send</button></form>
+        <p class="note" id="decider"></p>
+      </div>
+      <div class="card log"><h2>Log</h2><div id="log"></div></div>
+    </aside>
+  </main>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
