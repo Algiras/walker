@@ -1,4 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { generateMap } from "../src/game/map";
+import { Game } from "../src/game/sim";
+import { boardSize } from "../src/ui/layout";
+import { menuItems, placeMenu } from "../src/ui/pad-menu";
 import { Mic } from "../src/voice/mic";
 
 const BLOCK_MS = 8;
@@ -152,4 +157,134 @@ describe("microphone: push-to-talk", () => {
     wait(150);
     expect(heard).toHaveLength(1);
   });
+});
+
+describe("pad menu", () => {
+  const fresh = () => new Game(generateMap(7));
+
+  it("offers to build on an empty pad and to send the hero there", () => {
+    const g = fresh();
+    const items = menuItems(g, g.map.pads[0].name);
+    expect(items.map((i) => [i.label, i.price, i.blocked])).toEqual([["Build tower", "50", null], ["Send hero here", "", null]]);
+  });
+
+  it("says why a tower cannot be built", () => {
+    const g = fresh();
+    g.gold = 30;
+    expect(menuItems(g, g.map.pads[0].name)[0].blocked).toMatch(/not enough gold/i);
+  });
+
+  it("offers an upgrade and a sale on a built pad, with what they cost and return", () => {
+    const g = fresh();
+    const pad = g.map.pads[1].name;
+    g.addTower(pad);
+    const items = menuItems(g, pad);
+    expect(items.map((i) => [i.label, i.price])).toEqual([["Upgrade to level 2", "40"], ["Sell / remove tower", "+30"], ["Send hero here", ""]]);
+    expect(items.every((i) => i.blocked === null)).toBe(true);
+  });
+
+  it("blocks the upgrade of a tower that is at its top level", () => {
+    const g = fresh();
+    const pad = g.map.pads[1].name;
+    g.addTower(pad, 3);
+    const [upgrade] = menuItems(g, pad);
+    expect(upgrade.label).toBe("Upgrade (max level)");
+    expect(upgrade.blocked).toMatch(/maximum level/i);
+  });
+});
+
+describe("pad menu placement", () => {
+  const menu = { w: 200, h: 100 };
+  const board = { w: 800, h: 500 };
+
+  it("sits to the right of the pad, centred on it", () => {
+    expect(placeMenu({ x: 100, y: 250 }, menu, board, 30)).toEqual({ left: 130, top: 200 });
+  });
+
+  it("moves to the left of the pad when there is no room on the right", () => {
+    expect(placeMenu({ x: 700, y: 250 }, menu, board, 30)).toEqual({ left: 470, top: 200 });
+  });
+
+  it("stays inside the board at the top and the bottom", () => {
+    expect(placeMenu({ x: 100, y: 10 }, menu, board, 30).top).toBe(0);
+    expect(placeMenu({ x: 100, y: 495 }, menu, board, 30).top).toBe(400);
+  });
+
+  it("keeps the corner on the board when the menu is bigger than the board", () => {
+    expect(placeMenu({ x: 50, y: 50 }, { w: 400, h: 300 }, { w: 300, h: 200 }, 20)).toEqual({ left: 0, top: 0 });
+  });
+});
+
+describe("board size", () => {
+  const aspect = 18 / 11;
+
+  it("is limited by the height when the stage is wide", () => {
+    const { w, h } = boardSize({ stageW: 964, stageH: 550, chrome: 78, aspect, stacked: false });
+    expect(h).toBeLessThanOrEqual(550 - 78);
+    expect(w).toBeLessThanOrEqual(964);
+    expect(Math.abs(w / h - aspect)).toBeLessThan(0.02);
+  });
+
+  it("is limited by the width when the stage is narrow", () => {
+    expect(boardSize({ stageW: 600, stageH: 700, chrome: 78, aspect, stacked: false }).w).toBe(600);
+  });
+
+  it("never gets smaller than the minimum", () => {
+    expect(boardSize({ stageW: 600, stageH: 100, chrome: 78, aspect, stacked: false }).w).toBe(240);
+  });
+
+  it("follows the width alone when the page is one column", () => {
+    expect(boardSize({ stageW: 354, stageH: 100, chrome: 78, aspect, stacked: true }).w).toBe(354);
+  });
+});
+
+describe("colour contrast", () => {
+  const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
+
+  const block = (after: string) => {
+    const start = css.indexOf("{", css.indexOf(after));
+    for (let i = start, depth = 0; i < css.length; i++) {
+      if (css[i] === "{") depth++;
+      else if (css[i] === "}" && --depth === 0) return css.slice(start + 1, i);
+    }
+    throw new Error(`no block after ${after}`);
+  };
+  const tokens = (body: string) => Object.fromEntries([...body.matchAll(/--([\w-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+  const light = tokens(block(":root {"));
+  const dark = { ...light, ...tokens(block(':root:not([data-theme="light"])')) };
+
+  const resolve = (all: Record<string, string>, name: string): string => {
+    const v = all[name];
+    const ref = v.match(/^var\(--([\w-]+)\)$/);
+    return ref ? resolve(all, ref[1]) : v;
+  };
+  const channel = (c: number) => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const luminance = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => channel(parseInt(hex.slice(i, i + 2), 16)));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a: string, b: string) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  const text: [string, string][] = [
+    ["ink", "card"], ["ink", "bg"],
+    ["muted", "card"], ["muted", "bg"], ["muted", "accent-soft"],
+    ["accent-text", "card"], ["accent-text", "bg"], ["accent-text", "accent-soft"],
+    ["accent-text-hover", "card"],
+    ["accent-ink", "accent"], ["accent-ink", "accent-hover"],
+    ["ok-text", "card"],
+  ];
+  const parts: [string, string][] = [["ring", "card"], ["ring", "bg"]];
+
+  for (const [name, theme] of [["light", light], ["dark", dark]] as const) {
+    it(`keeps text readable (4.5:1) in the ${name} theme`, () => {
+      for (const [fg, bg] of text) expect(ratio(resolve(theme, fg), resolve(theme, bg)), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it(`keeps the focus ring visible (3:1) in the ${name} theme`, () => {
+      for (const [fg, bg] of parts) expect(ratio(resolve(theme, fg), resolve(theme, bg)), `${fg} on ${bg}`).toBeGreaterThanOrEqual(3);
+    });
+  }
 });
