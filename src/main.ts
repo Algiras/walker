@@ -286,7 +286,7 @@ async function handleText(text: string, t0: number, asrMs?: number) {
   }
 }
 
-async function onUtterance(pcm: Float32Array, endedAt: number) {
+async function hear(pcm: Float32Array, endedAt: number) {
   if (!stt) return;
   thinking(true);
   try {
@@ -299,6 +299,10 @@ async function onUtterance(pcm: Float32Array, endedAt: number) {
   }
 }
 
+// One phrase at a time: the recogniser is not meant to run twice at once, and orders should be carried out as spoken.
+let hearing: Promise<void> = Promise.resolve();
+const onUtterance = (pcm: Float32Array, endedAt: number) => { hearing = hearing.then(() => hear(pcm, endedAt)); };
+
 // --- setting up the voice stack before the game starts ------------------------------------------
 
 async function startMic() {
@@ -307,7 +311,7 @@ async function startMic() {
   const meter = document.querySelector<HTMLElement>(".meter")!;
   const level = $("level");
   let shown = -1, live = false;
-  m.onUtterance = (u) => void onUtterance(u.pcm, u.endedAt);
+  m.onUtterance = (u) => onUtterance(u.pcm, u.endedAt);
   m.ignoreInput = () => hero.speaking;
   m.onLevel = (rms, active) => {
     const pct = Math.min(100, Math.round(rms * 600));
