@@ -56,3 +56,17 @@ export function readWav(file: string): Float32Array {
   for (let i = 0; i < n; i++) out[i] = b.readInt16LE(44 + i * 2) / 32768;
   return out;
 }
+
+export interface NodeStt { name: string; transcribe(pcm: Float32Array): Promise<string> }
+
+/** STT=parakeet (default), whisper-base or whisper-small. */
+export async function loadAsr(id = process.env.STT ?? "parakeet"): Promise<NodeStt> {
+  if (id === "parakeet") {
+    const core = await loadParakeetNode();
+    return { name: "Parakeet Redux", transcribe: async (p) => (await core.transcribe(p)).text };
+  }
+  const repo = id === "whisper-small" ? "Xenova/whisper-small.en" : "Xenova/whisper-base.en";
+  const { pipeline } = await import("@huggingface/transformers");
+  const p: any = await pipeline("automatic-speech-recognition", repo, { device: "cpu", dtype: "q8" } as never);
+  return { name: id, transcribe: async (pcm) => ((await p(pcm)).text ?? "").trim() };
+}

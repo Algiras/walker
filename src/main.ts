@@ -3,7 +3,7 @@ import { Game } from "./game/sim";
 import { render } from "./game/render";
 import { describeCommand } from "./game/commands";
 import { Mic } from "./voice/mic";
-import { Parakeet } from "./voice/asr";
+import { loadStt, Stt, STT_OPTIONS, SttId } from "./voice/stt";
 import { loadPicker } from "./voice/llm";
 import { Decider, PickDecider } from "./voice/decide";
 import { RuleDecider } from "./voice/rules";
@@ -12,11 +12,16 @@ import { examplesFor, plain } from "./voice/examples";
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const params = new URLSearchParams(location.search);
 
+const sttSelect = $<HTMLSelectElement>("stt");
+for (const o of STT_OPTIONS) sttSelect.add(new Option(`${o.label} (${o.size})`, o.id));
+const wanted = params.get("stt") as SttId | null;
+if (wanted && STT_OPTIONS.some((o) => o.id === wanted)) sttSelect.value = wanted;
+
 const canvas = $<HTMLCanvasElement>("game");
 const ctx = canvas.getContext("2d")!;
 let game: Game;
 let decider: Decider = new RuleDecider();
-let parakeet: Parakeet | null = null;
+let stt: Stt | null = null;
 let mic: Mic | null = null;
 let shownLog = 0;
 
@@ -69,9 +74,9 @@ async function handleText(text: string, t0: number, asrMs?: number) {
 }
 
 async function onUtterance(pcm: Float32Array, endedAt: number) {
-  if (!parakeet) return;
-  const r = await parakeet.transcribe(pcm);
-  await handleText(r.text, endedAt, r.ms.total);
+  if (!stt) return;
+  const r = await stt.transcribe(pcm);
+  await handleText(r.text, endedAt, r.ms);
 }
 
 function progressBars() {
@@ -100,11 +105,13 @@ $("load").addEventListener("click", async () => {
   try {
     status("Requesting microphone…");
     mic = await Mic.start();
-    status("Loading Parakeet Redux…");
-    parakeet = await Parakeet.load(progress, log);
-    status(`Parakeet ready (encoder on ${parakeet.encoderDevice}). Loading Tev1 decision model…`);
-    const pick = await loadPicker(progress);
-    decider = new PickDecider("Tev1 0.8B", pick);
+    const pick = STT_OPTIONS.find((o) => o.id === sttSelect.value)!;
+    sttSelect.disabled = true;
+    status(`Loading ${pick.label}…`);
+    stt = await loadStt(pick.id, progress, log);
+    status(`${stt.name} ready (${stt.device}). Loading Tev1 decision model…`);
+    const picker = await loadPicker(progress);
+    decider = new PickDecider("Tev1 0.8B", picker);
     $("decider").textContent = `Decision engine: ${decider.name}`;
     status("Ready. Hold Space and speak.");
     mic.onUtterance = (u) => onUtterance(u.pcm, u.endedAt);
