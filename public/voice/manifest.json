@@ -1,5 +1,6 @@
 {
  "voice": "am_onyx",
+ "version": "8573e137",
  "lines": {
   "Holding position.": "holding-position.mp3",
   "Standing by.": "standing-by.mp3",

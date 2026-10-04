@@ -1,6 +1,8 @@
 // Records every line the hero can say with Kokoro (deep male voice), then bakes in the radio-style processing
 // with ffmpeg and writes small MP3s to public/voice/ plus a manifest. Cached: lines that already have a file are skipped.
-// Pass --force to re-record everything. Needs ffmpeg on the PATH.
+// Pass --force to re-record everything, or --reencode to redo only the ffmpeg step from the saved raw recordings
+// (use that after changing FILTER). Needs ffmpeg on the PATH.
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { KokoroTTS } from "kokoro-js";
@@ -10,6 +12,7 @@ const VOICE = "am_onyx";
 const OUT = new URL("../public/voice/", import.meta.url).pathname;
 const RAW = new URL("../.cache/voice-raw/", import.meta.url).pathname;
 const force = process.argv.includes("--force");
+const reencode = force || process.argv.includes("--reencode");
 
 const slug = (l: string) => l.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
@@ -28,7 +31,7 @@ function wav(pcm: Float32Array, rate: number): Buffer {
 const FILTER = [
   "silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.02",
   "areverse", "silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.02", "areverse",
-  "asetrate=22080", "aresample=24000",
+  "asetrate=22080", "aresample=24000", "atempo=1.12",
   "lowshelf=g=4:f=150", "acompressor=threshold=-20dB:ratio=3:attack=5:release=80",
   "alimiter=limit=0.89",
 ].join(",");
@@ -36,7 +39,7 @@ const FILTER = [
 mkdirSync(OUT, { recursive: true });
 mkdirSync(RAW, { recursive: true });
 const lines = allLines();
-const todo = lines.filter((l) => force || !existsSync(`${OUT}${slug(l)}.mp3`));
+const todo = lines.filter((l) => reencode || !existsSync(`${OUT}${slug(l)}.mp3`));
 let tts: KokoroTTS | null = null;
 for (const [i, line] of todo.entries()) {
   const raw = `${RAW}${VOICE}-${slug(line)}.wav`;
@@ -50,5 +53,6 @@ for (const [i, line] of todo.entries()) {
 }
 
 const lineMap = Object.fromEntries(lines.map((l) => [l, `${slug(l)}.mp3`]));
-writeFileSync(`${OUT}manifest.json`, JSON.stringify({ voice: VOICE, lines: lineMap }, null, 1) + "\n");
+const version = createHash("sha1").update(FILTER + VOICE).digest("hex").slice(0, 8);
+writeFileSync(`${OUT}manifest.json`, JSON.stringify({ voice: VOICE, version, lines: lineMap }, null, 1) + "\n");
 console.log(`${lines.length} lines (${todo.length} recorded)`);

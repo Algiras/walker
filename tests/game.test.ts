@@ -8,6 +8,7 @@ import { cleanTranscript, enemyNumber, splitCommands, gateOptions, hasEvidence, 
 import { settle } from "../src/voice/settle";
 import { PickDecider } from "../src/voice/decide";
 import { COSTS } from "../src/game/sim";
+import { SpeechQueue } from "../src/voice/speech-queue";
 import { allLines, calloutFor, eventLine, refusalCallout } from "../src/voice/callouts";
 import { existsSync, readFileSync } from "node:fs";
 import { Command } from "../src/game/commands";
@@ -404,6 +405,30 @@ describe("undo and new commands", () => {
     g.command({ kind: "resume" });
     g.command({ kind: "hold" });
     expect(g.command({ kind: "repeat" }).message).toMatch(/Holding/);
+  });
+});
+
+describe("speech queue", () => {
+  it("queues replies to orders in order and drops the oldest when it is full", () => {
+    const q = new SpeechQueue(3);
+    for (const l of ["a", "b", "c", "d"]) expect(q.push(l, 2, true)).toBe(true);
+    expect([q.next()?.line, q.next()?.line, q.next()?.line, q.next()]).toEqual(["b", "c", "d", undefined]);
+  });
+
+  it("never lets a game event wait behind speech", () => {
+    const q = new SpeechQueue();
+    expect(q.push("Wave one incoming.", 1, true)).toBe(false);
+    q.push("Moving out.", 2, false);
+    expect(q.push("Wave one incoming.", 1, false)).toBe(false);
+    q.next();
+    expect(q.push("Wave one incoming.", 1, false)).toBe(true);
+  });
+
+  it("skips a line that repeats the one just queued", () => {
+    const q = new SpeechQueue();
+    expect(q.push("Moving out.", 2, false)).toBe(true);
+    expect(q.push("Moving out.", 2, true)).toBe(false);
+    expect(q.length).toBe(1);
   });
 });
 

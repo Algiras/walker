@@ -24,7 +24,7 @@ let stt: Stt | null = null;
 let mic: Mic | null = null;
 let shownLog = 0;
 const hero = new HeroVoice();
-const sayLine = (line: string | null) => { if (line) void hero.say(line, 2); };
+const sayLine = (line: string | null) => { if (line) hero.say(line, 2); };
 
 function newGame(seed = Math.floor(Math.random() * 1e6)) {
   game = new Game(generateMap(seed));
@@ -36,7 +36,7 @@ function newGame(seed = Math.floor(Math.random() * 1e6)) {
   $("menu").hidden = true;
   pending = null;
   clearQueue();
-  game.announce = (e) => void hero.say(eventLine(e), 1);
+  game.announce = (e) => hero.say(eventLine(e), 1);
   hero.prefetch(warmLines(game));
   $("decider").textContent = `Decision engine: ${decider.name}`;
   showExamples();
@@ -402,7 +402,7 @@ const setHeroVoice = (on: boolean) => {
   showHeroVoice();
   if (on) {
     hero.unlock();
-    void hero.say("Standing by.", 2);
+    hero.say("Standing by.", 2);
   }
 };
 wantVoice.addEventListener("change", () => setHeroVoice(wantVoice.checked));
