@@ -4,8 +4,9 @@ import { Game } from "../src/game/sim";
 import { ruleParse } from "../src/voice/rules";
 import { PAD_NAMES } from "../src/game/map";
 import { actionOptions } from "../src/voice/context";
-import { cleanTranscript, gateOptions, intents, intentOf, slotNumber, spokenNumbers } from "../src/voice/verbs";
-import { settle } from "../src/voice/decide";
+import { cleanTranscript, gateOptions, hasEvidence, intents, intentOf, slotNumber, spokenNumbers } from "../src/voice/verbs";
+import { settle } from "../src/voice/settle";
+import { PickDecider } from "../src/voice/decide";
 import { COSTS } from "../src/game/sim";
 
 describe("map generation", () => {
@@ -185,6 +186,45 @@ describe("option gate details", () => {
   });
 });
 
+describe("nothing to act on", () => {
+  const g = new Game(generateMap(7));
+  g.hero.pos = { x: 9, y: 5.5 };
+
+  it("offers no option, rather than a wrong one, when asked to sell with no towers", () => {
+    expect(gateOptions(actionOptions(g), "sell tower 2")).toEqual([]);
+    expect(gateOptions(actionOptions(g), "cell tower 2")).toEqual([]);
+  });
+
+  it("refuses to sell a tower that is not there even when other towers exist", () => {
+    const h = new Game(generateMap(7));
+    h.addTower(h.map.pads[0].name);
+    expect(gateOptions(actionOptions(h), "sell tower 3")).toEqual([]);
+    expect(gateOptions(actionOptions(h), "sell tower 1").length).toBe(1);
+  });
+
+  it("the decider rejects with an explanation instead of asking the model", async () => {
+    let asked = false;
+    const d = new PickDecider("fake", async () => { asked = true; return [1]; });
+    const r = await d.decide("Cell Tower 2", g);
+    expect(r.status).toBe("reject");
+    expect(r.note).toMatch(/no tower/);
+    expect(asked).toBe(false);
+  });
+
+  it("trusts the model more when the keywords reach the same command", async () => {
+    // 60/40 between two builds near the base; keywords (the game's own pick for "defend the base") agree with the first
+    const target = g.bestCandidate({ near: "base" })!.command as { kind: "build"; pad: string };
+    const other = g.map.pads.find((p) => p.name !== target.pad)!.name;
+    const weights = (first: string, second: string) => async ({ options }: { options: { key: string }[] }) =>
+      options.map((o) => (o.key === `build_${first.toLowerCase()}` ? 0.6 : o.key === `build_${second.toLowerCase()}` ? 0.4 : 0));
+
+    const agree = await new PickDecider("fake", weights(target.pad, other)).decide("defend the base", g);
+    expect(agree.command).toEqual(target);
+    expect(agree.status).toBe("act");
+    expect(agree.trace).toMatch(/keywords agree/);
+  });
+});
+
 describe("verbs", () => {
   it("reads sell separately from defend, and destroy by what it is aimed at", () => {
     expect(intents("sell tower 3")).toEqual(["sell"]);
@@ -254,5 +294,166 @@ describe("keyword gate", () => {
   it("drops none once the verbs settle the intent, and keeps it otherwise", () => {
     expect(gateOptions(actionOptions(g), "go to Alpha").some((o) => o.value === null)).toBe(false);
     expect(gateOptions(actionOptions(g), "Alpha").some((o) => o.value === null)).toBe(true);
+  });
+});
+
+describe("undo and new commands", () => {
+  const world = () => new Game(generateMap(7));
+  const settle = (g: Game, seconds = 40) => { for (let i = 0; i < seconds * 30; i++) g.step(1 / 30); };
+
+  it("cancels a build while the hero is still walking there", () => {
+    const g = world();
+    g.command({ kind: "build", pad: g.map.pads[0].name });
+    g.step(1 / 30);
+    expect(g.undo().message).toMatch(/Cancelled/);
+    expect(g.hero.order.type).toBe("idle");
+    settle(g, 10);
+    expect(g.towers).toHaveLength(0);
+    expect(g.gold).toBe(100);
+  });
+
+  it("reverts a finished build with a full refund, then the order before it", () => {
+    const g = world();
+    const pad = g.map.pads[0].name;
+    g.command({ kind: "build", pad });
+    for (let i = 0; i < 30 * 40 && !g.towerAt(pad); i++) g.step(1 / 30);
+    expect(g.gold).toBe(50);
+    expect(g.undo().message).toMatch(/Reverted: removed tower 1/);
+    expect(g.towerAt(pad)).toBeUndefined();
+    expect(g.gold).toBe(100);
+  });
+
+  it("reverts an upgrade", () => {
+    const g = world();
+    const t = g.addTower(g.map.pads[0].name);
+    g.gold = 100;
+    g.command({ kind: "upgrade", pad: t.pad });
+    for (let i = 0; i < 30 * 40 && t.level < 2; i++) g.step(1 / 30);
+    const afterUpgrade = g.gold;
+    g.undo();
+    expect(t.level).toBe(1);
+    expect(g.gold).toBe(afterUpgrade + COSTS.upgrade[0]);
+    expect(t.spent).toBe(COSTS.build);
+  });
+
+  it("brings a sold tower back, and refuses when the player cannot cover it", () => {
+    const g = world();
+    const t = g.addTower(g.map.pads[0].name, 2);
+    g.command({ kind: "sell", pad: t.pad });
+    for (let i = 0; i < 30 * 40 && g.towerAt(t.pad); i++) g.step(1 / 30);
+    const refund = g.gold - 100;
+    expect(refund).toBeGreaterThan(0);
+    g.gold = 0;
+    expect(g.undo().ok).toBe(false);
+    expect(g.towerAt(t.pad)).toBeUndefined();
+    g.gold = refund + 10;
+    expect(g.undo().ok).toBe(true);
+    expect(g.towerAt(t.pad)?.level).toBe(2);
+    expect(g.gold).toBe(10);
+  });
+
+  it("says so when there is nothing to undo", () => {
+    expect(world().undo()).toEqual({ ok: false, message: "Nothing to undo." });
+  });
+
+  it("pauses, resumes and changes speed", () => {
+    const g = world();
+    g.command({ kind: "pause" });
+    const t = g.time;
+    g.step(1);
+    expect(g.time).toBe(t);
+    expect(g.command({ kind: "pause" }).ok).toBe(false);
+    g.command({ kind: "resume" });
+    g.command({ kind: "speed", fast: true });
+    expect(g.speed).toBe(2);
+  });
+
+  it("calls the next wave early only between waves", () => {
+    const g = world();
+    expect(g.command({ kind: "nextwave" }).ok).toBe(true);
+    expect(g.wave).toBe(1);
+    expect(g.command({ kind: "nextwave" }).message).toMatch(/still arriving/);
+  });
+
+  it("nudges inside the map and patrols between spawn and base", () => {
+    const g = world();
+    g.hero.pos = { x: 0.6, y: 5 };
+    g.command({ kind: "nudge", dir: "left" });
+    settle(g, 3);
+    expect(g.hero.pos.x).toBeGreaterThanOrEqual(0.5);
+    g.command({ kind: "patrol" });
+    settle(g, 3);
+    expect(g.orderText()).toBe("patrolling");
+  });
+
+  it("repeats the last real command but not itself", () => {
+    const g = world();
+    expect(g.command({ kind: "repeat" }).ok).toBe(false);
+    g.command({ kind: "attack", mode: "first" });
+    g.command({ kind: "pause" });
+    g.command({ kind: "resume" });
+    g.command({ kind: "hold" });
+    expect(g.command({ kind: "repeat" }).message).toMatch(/Holding/);
+  });
+});
+
+describe("evidence", () => {
+  it("sees something to act on, or nothing", () => {
+    for (const t of ["go to Charlie", "sell tower 3", "defend the base", "pause", "undo", "we need more towers", "Charlie"]) expect(hasEvidence(t)).toBe(true);
+    for (const t of ["you", "Thank you.", "uh huh", "what a lovely day"]) expect(hasEvidence(t)).toBe(false);
+  });
+
+  it("rejects noise outright and never lets a keyword-free guess act", async () => {
+    const g = new Game(generateMap(7));
+    const confident = new PickDecider("fake", async ({ options }) => options.map((_, i) => (i === 0 ? 0.95 : 0.01)));
+    const noise = await confident.decide("you", g);
+    expect(noise.status).toBe("reject");
+    const vague = await confident.decide("could you maybe help me a little here", g);
+    expect(vague.status).toBe("confirm");
+  });
+});
+
+describe("keyword shortcuts", () => {
+  const g = new Game(generateMap(7));
+  g.hero.pos = { x: 9, y: 5.5 };
+  const keys = (t: string) => gateOptions(actionOptions(g), t).map((o) => o.key);
+
+  it("narrows unmistakable keywords to a single option", () => {
+    expect(keys("patrol the path")).toEqual(["patrol"]);
+    expect(keys("pause the game")).toEqual(["pause"]);
+    expect(keys("resume")).toEqual(["resume"]);
+    expect(keys("speed it up")).toEqual(["speed_up"]);
+    expect(keys("slow it down")).toEqual(["speed_down"]);
+    expect(keys("call the next wave")).toEqual(["nextwave"]);
+  });
+});
+
+describe("new voice intents", () => {
+  it("separates undo, repeat and game control from movement", () => {
+    expect(intents("undo that")).toEqual(["undo"]);
+    expect(intents("take that back")).toEqual(["undo"]);
+    expect(intents("do that again")).toEqual(["repeat"]);
+    expect(intents("pause the game")).toEqual(["game"]);
+    expect(intents("call the next wave")).toEqual(["game"]);
+    expect(intents("go left")).toEqual(["move"]);
+  });
+
+  it("keeps only the matching direction for a bare go-left", () => {
+    const g = new Game(generateMap(7));
+    g.hero.pos = { x: 9, y: 5.5 };
+    const opts = gateOptions(actionOptions(g), "go left");
+    expect(opts.map((o) => (o.value && o.value !== "auto" && o.value.kind === "nudge" ? o.value.dir : "x"))).toEqual(["left"]);
+  });
+
+  it("the keyword fallback understands them", () => {
+    const w = { padNames: PAD_NAMES.slice(0, 6), padOfSlot: (n: number) => PAD_NAMES[n - 1], hasTower: () => false, best: () => null };
+    expect(ruleParse("undo that", w)).toEqual({ kind: "undo" });
+    expect(ruleParse("pause the game", w)).toEqual({ kind: "pause" });
+    expect(ruleParse("resume", w)).toEqual({ kind: "resume" });
+    expect(ruleParse("speed it up", w)).toEqual({ kind: "speed", fast: true });
+    expect(ruleParse("go left", w)).toEqual({ kind: "nudge", dir: "left" });
+    expect(ruleParse("patrol the path", w)).toEqual({ kind: "patrol" });
+    expect(ruleParse("call the next wave", w)).toEqual({ kind: "nextwave" });
+    expect(ruleParse("do that again", w)).toEqual({ kind: "repeat" });
   });
 });

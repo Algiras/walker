@@ -2,14 +2,17 @@ import { Option } from "./context";
 import { PAD_NAMES } from "../game/map";
 import { mentions } from "./fuzzy";
 
-export type Intent = "move" | "defend" | "attack" | "hold" | "sell";
+export type Intent = "move" | "defend" | "attack" | "hold" | "sell" | "game" | "undo" | "repeat";
 
 export const VERBS: Record<Intent, RegExp> = {
-  move: /\b(go|goto|move|walk|head|run|retreat|return|back|fall back|come)\b/,
+  move: /\b(go|goto|move|walk|head|run|retreat|return|fall back|get back|come|patrol|sweep)\b/,
   defend: /\b(build|place|construct|put|create|make|add|upgrade|improve|strengthen|reinforce|defend|defense|defence|protect|cover|stronger)\b/,
   attack: /\b(attack|kill|shoot|fight|target|focus|hit)\b/,
   hold: /\b(stop(?! (them|it|him|her|those|the))|hold|stay|wait|halt|freeze)\b/,
   sell: /\b(sell|scrap|demolish|dismantle|remove|refund|tear down|get rid of)\b/,
+  game: /\b(pause|resume|unpause|continue|faster|speed|slower|slow|normal speed|next wave|call the wave|send the wave|call wave)\b/,
+  undo: /\b(undo|revert|rollback|roll back|take (that|it) back|cancel (that|it|the last)|never ?mind|go back on that|oops)\b/,
+  repeat: /\b(again|repeat|redo|same again|one more time)\b/,
 };
 
 /** Words that make a request about a tower or pad, not about an enemy. */
@@ -29,7 +32,10 @@ export function intentOf(o: Option): Intent | null {
   if (o.value === null) return null;
   if (o.value === "auto") return "defend";
   const k = o.value.kind;
-  return k === "build" || k === "upgrade" ? "defend" : k;
+  if (k === "build" || k === "upgrade") return "defend";
+  if (k === "nudge" || k === "patrol") return "move";
+  if (k === "pause" || k === "resume" || k === "speed" || k === "nextwave") return "game";
+  return k;
 }
 
 export interface Goal { area?: string; near?: "base" | "spawn"; pressure?: boolean }
@@ -43,6 +49,23 @@ export function goalOf(text: string): Goal {
     near: /\b(spawn|entrance|early|start)\b/.test(s) ? "spawn" : /\b(base|home|last line)\b/.test(s) ? "base" : undefined,
     pressure: /\b(pressure|under attack|where (they|the enemies|enemies) (are|come))\b/.test(s),
   };
+}
+
+/** Commands with an unmistakable keyword: when it is said, the model only has to confirm that one option. */
+function narrowByKeyword(options: Option[], s: string, found: Intent[]): Option[] {
+  const kind = (o: Option) => (o.value && o.value !== "auto" ? o.value : null);
+  const only = (pred: (o: Option) => boolean) => {
+    const hit = options.filter(pred);
+    return hit.length ? hit : options;
+  };
+  if (/\bpatrol\b/.test(s)) return only((o) => kind(o)?.kind === "patrol");
+  if (!found.includes("game")) return options;
+  if (/\b(next wave|call (the )?wave|send (the )?wave)\b/.test(s)) return only((o) => kind(o)?.kind === "nextwave");
+  if (/\bpause\b/.test(s)) return only((o) => kind(o)?.kind === "pause");
+  if (/\b(resume|unpause|continue)\b/.test(s)) return only((o) => kind(o)?.kind === "resume");
+  if (/\b(slower|slow|normal speed)\b/.test(s)) return only((o) => { const v = kind(o); return v?.kind === "speed" && !v.fast; });
+  if (/\b(faster|speed)\b/.test(s)) return only((o) => { const v = kind(o); return v?.kind === "speed" && v.fast; });
+  return options;
 }
 
 const BUILD = /\b(build|place|construct|put|create)\b/;
@@ -64,14 +87,18 @@ export function gateOptions(options: Option[], text: string): Option[] {
   let out = options;
 
   const found = intents(text);
-  if (found.length === 1) out = out.filter((o) => intentOf(o) === found[0]);
+  if (found.length === 1) {
+    out = out.filter((o) => intentOf(o) === found[0]);
+    if (!out.length) return [];
+  }
+
+  out = narrowByKeyword(out, clean.replace(/[^a-z\s]/g, " "), found);
 
   const words = clean.replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
   const slot = slotNumber(text);
-  const padNames = [...new Set(out.map(padOf).filter((n): n is string => !!n))];
-  const named = padNames.filter((n) => mentions(words, n));
+  const named = PAD_NAMES.filter((n) => mentions(words, n));
   const numbered = slot === null ? null : PAD_NAMES[slot - 1];
-  const focus = new Set([...named, ...(numbered && padNames.includes(numbered) ? [numbered] : [])]);
+  const focus = new Set([...named, ...(numbered ? [numbered] : [])]);
   if (focus.size) {
     out = out.filter((o) => {
       const v = o.value && o.value !== "auto" ? o.value : null;
@@ -79,6 +106,7 @@ export function gateOptions(options: Option[], text: string): Option[] {
       const p = padOf(o);
       return p === null || focus.has(p);
     });
+    if (!out.length) return [];
   } else {
     const goal = goalOf(text);
     const where = (o: Option) => o.text.slice(o.text.indexOf("(") + 1);
@@ -92,24 +120,36 @@ export function gateOptions(options: Option[], text: string): Option[] {
     if (goal.pressure) keep((o) => where(o).includes("enemies in range now"));
   }
 
+  const dir = clean.match(/\b(left|right|up|down|north|south|east|west)\b/)?.[1];
+  if (dir && found.includes("move") && !focus.size && !/\b(to|pad|tower|base|spawn)\b/.test(clean)) {
+    const want = ({ north: "up", south: "down", east: "right", west: "left" } as Record<string, string>)[dir] ?? dir;
+    const nudges = out.filter((o) => o.value && o.value !== "auto" && o.value.kind === "nudge" && o.value.dir === want);
+    if (nudges.length) out = nudges;
+  }
+
   const kinds = (k: string) => out.filter((o) => o.value && o.value !== "auto" && o.value.kind === k);
   const s = clean.replace(/[^a-z\s]/g, " ");
   if (BUILD.test(s) && !UPGRADE.test(s) && kinds("build").length) out = out.filter((o) => !(o.value && o.value !== "auto" && o.value.kind === "upgrade"));
   else if (UPGRADE.test(s) && !BUILD.test(s) && kinds("upgrade").length) out = out.filter((o) => !(o.value && o.value !== "auto" && o.value.kind === "build"));
 
-  return cap(out.length ? out : options);
+  return cap(out);
 }
 
 /** Tev1 labels options A to X. Past that, drop the least likely first: sells, then walking to pads. */
 export function cap(options: Option[], max = MAX_OPTIONS): Option[] {
   const out = [...options];
+  const kind = (o: Option) => (o.value && o.value !== "auto" ? o.value : null);
   const drop = (pred: (o: Option) => boolean) => {
     for (let i = out.length - 1; i >= 0 && out.length > max; i--) if (pred(out[i])) out.splice(i, 1);
   };
-  const kind = (o: Option) => (o.value && o.value !== "auto" ? o.value : null);
   drop((o) => kind(o)?.kind === "sell");
+  drop((o) => kind(o)?.kind === "nudge");
   drop((o) => { const v = kind(o); return v?.kind === "move" && v.to.type === "pad"; });
-  return out.slice(0, max);
+  drop((o) => kind(o)?.kind === "speed");
+  drop((o) => kind(o)?.kind === "patrol");
+  const none = out.find((o) => o.value === null);
+  const kept = out.filter((o) => o.value !== null).slice(0, max - (none ? 1 : 0));
+  return none ? [...kept, none] : kept;
 }
 
 const WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
@@ -129,6 +169,20 @@ export function spokenNumbers(text: string): string {
 /** Fixes what speech recognition tends to get wrong here, then normalises spoken numbers. */
 export function cleanTranscript(text: string): string {
   return spokenNumbers(text.replace(/\b(cell|sale|sail|sel)\b(?=\s+(?:the\s+)?(?:tower|pad|slot|number|no\b|\d|one|two|three|four|five|six|seven|eight|nine|ten|alpha|alfa|bravo|charlie|charley|delta|echo|foxtrot|golf))/gi, "sell"));
+}
+
+/** Does the transcript contain anything the game could act on: a verb, a pad, a number, a place or a game word? */
+export function hasEvidence(text: string): boolean {
+  const s = cleanTranscript(text).toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+  const words = s.split(/\s+/).filter(Boolean);
+  const g = goalOf(text);
+  return (
+    intents(text).length > 0 ||
+    slotNumber(text) !== null ||
+    PAD_NAMES.some((n) => mentions(words, n)) ||
+    !!(g.area || g.near || g.pressure) ||
+    /\b(towers?|enem(y|ies)|waves?|hero|base|spawn|gold|upgrade|path)\b/.test(s)
+  );
 }
 
 export const slotNumber = (text: string): number | null => {

@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Walker</title>
+  <meta name="description" content="Command a hero in a tower-defense map with your voice. Speech recognition and decisions run entirely in your browser." />
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
@@ -11,6 +12,7 @@
     <h1>Walker</h1>
     <span class="sub">Talk to your hero. Speech and decisions run in your browser.</span>
     <span class="spacer"></span>
+    <a class="link" href="https://github.com/Algiras/walker" target="_blank" rel="noopener">GitHub</a>
     <button id="newmap">New map</button>
   </header>
   <main>
@@ -20,10 +22,12 @@
         <span>Gold <b id="gold">0</b></span>
         <span>Base <b id="hp">0</b></span>
         <span class="order">Hero <b id="order">idle</b></span>
+        <span id="flags" class="flags"></span>
         <span class="seed">seed <b id="seed"></b></span>
       </div>
       <div class="board">
         <canvas id="game"></canvas>
+        <div id="menu" class="menu" hidden></div>
         <div id="banner" hidden></div>
       </div>
     </section>
@@ -33,11 +37,37 @@
           <h2>Voice</h2>
           <label class="check"><input type="checkbox" id="vad" /> auto-detect</label>
         </div>
-        <select id="stt" aria-label="Speech recognizer"></select>
         <button id="load" class="primary wide">Load voice models</button>
         <div class="bars" id="bars"></div>
         <div class="meter"><i id="level"></i></div>
         <p class="note" id="status">Not loaded. The first load downloads about 1.3 GB, then it is cached. Hold <kbd>Space</kbd> to talk.</p>
+      </div>
+      <div class="card" id="controls">
+        <h2>Hero</h2>
+        <div class="ctl">
+          <button data-cmd='{"kind":"hold"}' title="Stop and cancel the current order">■ Stop</button>
+          <button data-cmd='{"kind":"move","to":{"type":"base"}}' title="Retreat to the base">⌂ Base</button>
+          <button data-cmd='{"kind":"patrol"}' title="Walk the path from spawn to base and back">↔ Patrol</button>
+          <button data-cmd='{"kind":"undo"}' title="Undo the last action (Ctrl/Cmd+Z)">↶ Undo</button>
+          <button data-cmd='{"kind":"repeat"}' title="Do the last command again">↻ Again</button>
+        </div>
+        <div class="ctl attack">
+          <span>Attack</span>
+          <button data-cmd='{"kind":"attack","mode":"nearest"}' title="Nearest enemy to the hero">Near</button>
+          <button data-cmd='{"kind":"attack","mode":"strongest"}' title="Strongest enemy">Strong</button>
+          <button data-cmd='{"kind":"attack","mode":"weakest"}' title="Weakest enemy">Weak</button>
+          <button data-cmd='{"kind":"attack","mode":"first"}' title="The enemy furthest along the path">First</button>
+        </div>
+        <div class="ctl game">
+          <button data-cmd='{"kind":"nudge","dir":"left"}' title="Walk left">←</button>
+          <button data-cmd='{"kind":"nudge","dir":"up"}' title="Walk up">↑</button>
+          <button data-cmd='{"kind":"nudge","dir":"down"}' title="Walk down">↓</button>
+          <button data-cmd='{"kind":"nudge","dir":"right"}' title="Walk right">→</button>
+          <button id="pause" title="Pause or resume (P)">⏸ Pause</button>
+          <button id="speed" title="Switch between normal and double speed">×2</button>
+          <button data-cmd='{"kind":"nextwave"}' title="Call the next wave early for bonus gold">⏭ Wave</button>
+        </div>
+        <p class="note">Click a pad on the map to build, upgrade or sell. Click the ground to send the hero there.</p>
       </div>
       <div class="card">
         <h2>Command</h2>

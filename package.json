@@ -2,8 +2,10 @@
   "name": "walker",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
+  "repository": "github:Algiras/walker",
   "type": "module",
-  "description": "Talk to a hero in a tower-defense map. Parakeet Redux speech recognition and a small decision LLM, all in the browser.",
+  "description": "Command a hero in a tower-defense map by voice. Whisper speech recognition and the Tev1 decision model, all in the browser.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -12,7 +14,7 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "gen:audio": "tsx scripts/gen-audio.ts",
     "bench:llm": "tsx scripts/bench-llm.ts",
-    "bench:stt": "tsx scripts/bench-stt.ts"
+    "deploy": "bash scripts/deploy.sh"
   },
   "devDependencies": {
     "@webgpu/types": "^0.1.74",

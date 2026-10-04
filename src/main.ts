@@ -3,7 +3,7 @@ import { Game } from "./game/sim";
 import { render } from "./game/render";
 import { Command, describeCommand } from "./game/commands";
 import { Mic } from "./voice/mic";
-import { loadStt, Stt, STT_OPTIONS, SttId } from "./voice/stt";
+import { loadStt, Stt } from "./voice/stt";
 import { loadPicker } from "./voice/llm";
 import { Decider, PickDecider } from "./voice/decide";
 import { RuleDecider } from "./voice/rules";
@@ -11,11 +11,6 @@ import { examplesFor, plain } from "./voice/examples";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const params = new URLSearchParams(location.search);
-
-const sttSelect = $<HTMLSelectElement>("stt");
-for (const o of STT_OPTIONS) sttSelect.add(new Option(`${o.label} (${o.size})`, o.id));
-const wanted = params.get("stt") as SttId | null;
-if (wanted && STT_OPTIONS.some((o) => o.id === wanted)) sttSelect.value = wanted;
 
 const canvas = $<HTMLCanvasElement>("game");
 const ctx = canvas.getContext("2d")!;
@@ -32,6 +27,8 @@ function newGame(seed = Math.floor(Math.random() * 1e6)) {
   shownLog = 0;
   $("log").innerHTML = "";
   $("banner").hidden = true;
+  $("menu").hidden = true;
+  pending = null;
   $("decider").textContent = `Decision engine: ${decider.name}`;
   showExamples();
 }
@@ -59,6 +56,8 @@ function setTiming(rows: [string, string][]) {
   $("timing").querySelector("tbody")!.innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join("");
 }
 
+// --- running commands ---------------------------------------------------------------------------
+
 const YES = /^\s*(yes|yeah|yep|yup|confirm|do it|sure|ok|okay|correct|right)\b/i;
 const NO = /^\s*(no|nope|cancel|never mind|nevermind|stop that|wrong)\b/i;
 let pending: { command: Command; until: number } | null = null;
@@ -74,8 +73,15 @@ function run(c: Command) {
   advise(c);
   const out = game.command(c);
   log(out.message);
-  if (!out.ok) $("decision").textContent = out.message;
+  $("decision").textContent = out.ok ? `${describeCommand(c)}` : out.message;
   return out;
+}
+
+/** Commands from the buttons and the map skip the speech and decision steps. */
+function press(c: Command) {
+  pending = null;
+  $("heard").textContent = "";
+  run(c);
 }
 
 async function handleText(text: string, t0: number, asrMs?: number) {
@@ -87,8 +93,8 @@ async function handleText(text: string, t0: number, asrMs?: number) {
     if (YES.test(text)) {
       const c = pending.command;
       pending = null;
-      $("decision").textContent = `Confirmed: ${describeCommand(c)}`;
       run(c);
+      $("decision").textContent = `Confirmed: ${describeCommand(c)}`;
       return;
     }
     if (NO.test(text)) {
@@ -102,8 +108,8 @@ async function handleText(text: string, t0: number, asrMs?: number) {
   const d = await decider.decide(text, game);
   const pct = `${Math.round(d.confidence * 100)}%`;
   if (d.status === "act" && d.command) {
-    $("decision").textContent = `${describeCommand(d.command)}  ·  ${d.trace}`;
     run(d.command);
+    $("decision").textContent = `${describeCommand(d.command)}  ·  ${d.trace}`;
   } else if (d.status === "confirm" && d.command) {
     pending = { command: d.command, until: Date.now() + 10_000 };
     game.hero.shake = 0.35;
@@ -127,6 +133,8 @@ async function onUtterance(pcm: Float32Array, endedAt: number) {
   const r = await stt.transcribe(pcm);
   await handleText(r.text, endedAt, r.ms);
 }
+
+// --- loading the voice stack --------------------------------------------------------------------
 
 function progressBars() {
   const bars = $("bars");
@@ -152,33 +160,89 @@ $("load").addEventListener("click", async () => {
   const status = (m: string) => ($("status").textContent = m);
   const progress = progressBars();
   try {
-    status("Requesting microphone…");
-    mic = await Mic.start();
-    const pick = STT_OPTIONS.find((o) => o.id === sttSelect.value)!;
-    sttSelect.disabled = true;
-    status(`Loading ${pick.label}…`);
-    stt = await loadStt(pick.id, progress, log);
-    status(`${stt.name} ready (${stt.device}). Loading Tev1 decision model…`);
-    const picker = await loadPicker(progress);
-    decider = new PickDecider("Tev1 0.8B", picker);
+    status("Loading Whisper small.en…");
+    stt = await loadStt(progress, log);
+    status(`${stt.name} ready (${stt.device}). Loading the Tev1 decision model…`);
+    decider = new PickDecider("Tev1 0.8B", await loadPicker(progress));
     $("decider").textContent = `Decision engine: ${decider.name}`;
-    status("Ready. Hold Space and speak.");
-    mic.onUtterance = (u) => onUtterance(u.pcm, u.endedAt);
-    mic.onLevel = (rms, active) => {
-      $("level").style.width = `${Math.min(100, rms * 600)}%`;
-      document.querySelector(".meter")!.classList.toggle("live", active);
-    };
-    $<HTMLInputElement>("vad").addEventListener("change", (e) => {
-      mic!.mode = (e.target as HTMLInputElement).checked ? "vad" : "ptt";
-    });
+    try {
+      mic = await Mic.start();
+      mic.onUtterance = (u) => onUtterance(u.pcm, u.endedAt);
+      mic.onLevel = (rms, active) => {
+        $("level").style.width = `${Math.min(100, rms * 600)}%`;
+        document.querySelector(".meter")!.classList.toggle("live", active);
+      };
+      $<HTMLInputElement>("vad").addEventListener("change", (e) => {
+        mic!.mode = (e.target as HTMLInputElement).checked ? "vad" : "ptt";
+      });
+      status("Ready. Hold Space and speak.");
+    } catch {
+      status("Models ready, but the microphone is unavailable. You can still type commands.");
+    }
   } catch (e) {
     status(`Failed: ${(e as Error).message}`);
     btn.disabled = false;
   }
 });
 
+// --- hero buttons, map clicks, keyboard ---------------------------------------------------------
+
+for (const b of document.querySelectorAll<HTMLButtonElement>("#controls [data-cmd]")) {
+  b.addEventListener("click", () => press(JSON.parse(b.dataset.cmd!)));
+}
+$("pause").addEventListener("click", () => press({ kind: game.paused ? "resume" : "pause" }));
+$("speed").addEventListener("click", () => press({ kind: "speed", fast: game.speed === 1 }));
+
+const menu = $("menu");
+const closeMenu = () => (menu.hidden = true);
+
+function openPadMenu(padName: string, px: number, py: number) {
+  const pad = game.padByName(padName)!;
+  const t = game.towerAt(padName);
+  const items: { label: string; cmd: Command }[] = [];
+  if (!t) items.push({ label: "Build tower", cmd: { kind: "build", pad: padName } });
+  else {
+    const up = game.upgradeCost(t);
+    items.push({ label: up === null ? "Upgrade (max level)" : `Upgrade to level ${t.level + 1}`, cmd: { kind: "upgrade", pad: padName } });
+    items.push({ label: `Sell tower`, cmd: { kind: "sell", pad: padName } });
+  }
+  items.push({ label: "Send hero here", cmd: { kind: "move", to: { type: "pad", name: padName } } });
+
+  menu.innerHTML = `<div class="menu-title">Pad ${pad.number} ${pad.name}${t ? ` · tower ${t.id}, level ${t.level}` : ""}</div>`;
+  for (const it of items) {
+    const b = document.createElement("button");
+    const no = game.refusal(it.cmd);
+    const price = it.cmd.kind === "build" ? "50" : it.cmd.kind === "upgrade" && t && game.upgradeCost(t) !== null ? String(game.upgradeCost(t)) : it.cmd.kind === "sell" && t ? `+${game.sellValue(t)}` : "";
+    b.innerHTML = `<span>${it.label}</span><em>${price}</em>`;
+    b.disabled = !!no;
+    b.title = no ?? "";
+    b.addEventListener("click", () => { closeMenu(); press(it.cmd); });
+    menu.append(b);
+  }
+  menu.style.left = `${Math.min(px, canvas.clientWidth - 200)}px`;
+  menu.style.top = `${Math.min(py + 8, canvas.clientHeight - 40 - items.length * 34)}px`;
+  menu.hidden = false;
+}
+
+canvas.addEventListener("click", (e) => {
+  const r = canvas.getBoundingClientRect();
+  const x = ((e.clientX - r.left) / r.width) * game.map.w;
+  const y = ((e.clientY - r.top) / r.height) * game.map.h;
+  const pad = game.map.pads.find((p) => Math.hypot(p.pos.x - x, p.pos.y - y) < 0.6);
+  if (pad) {
+    openPadMenu(pad.name, e.clientX - r.left, e.clientY - r.top);
+    return;
+  }
+  if (!menu.hidden) return closeMenu();
+  press({ kind: "move", to: { type: "point", x: Math.min(game.map.w - 0.5, Math.max(0.5, x)), y: Math.min(game.map.h - 0.5, Math.max(0.5, y)) } });
+});
+
 addEventListener("keydown", (e) => {
-  if (e.code === "Space" && !e.repeat && (e.target as HTMLElement).tagName !== "INPUT") { e.preventDefault(); mic?.press(); }
+  const typing = (e.target as HTMLElement).tagName === "INPUT";
+  if (e.code === "Space" && !e.repeat && !typing) { e.preventDefault(); mic?.press(); }
+  else if (e.key === "Escape") closeMenu();
+  else if (!typing && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") { e.preventDefault(); press({ kind: "undo" }); }
+  else if (!typing && e.key.toLowerCase() === "p" && !e.metaKey && !e.ctrlKey) press({ kind: game.paused ? "resume" : "pause" });
 });
 addEventListener("keyup", (e) => { if (e.code === "Space") mic?.release(); });
 
@@ -191,11 +255,16 @@ $<HTMLFormElement>("typed").addEventListener("submit", (e) => {
 });
 $("newmap").addEventListener("click", () => newGame());
 
+// --- the loop -----------------------------------------------------------------------------------
+
 function hud() {
   $("wave").textContent = String(game.wave);
   $("gold").textContent = String(game.gold);
   $("hp").textContent = String(game.baseHp);
   $("order").textContent = game.orderText();
+  $("flags").textContent = [game.paused ? "paused" : "", game.speed === 2 ? "×2" : ""].filter(Boolean).join(" · ");
+  $("pause").textContent = game.paused ? "▶ Resume" : "⏸ Pause";
+  $("speed").classList.toggle("on", game.speed === 2);
   for (; shownLog < game.log.length; shownLog++) log(game.log[shownLog]);
   if (game.state === "lost") {
     $("banner").hidden = false;
@@ -221,7 +290,7 @@ newGame(params.get("seed") ? Number(params.get("seed")) : undefined);
 let last = performance.now();
 let acc = 0;
 function frame(now: number) {
-  acc += Math.min(0.25, (now - last) / 1000);
+  acc += Math.min(0.25, (now - last) / 1000) * game.speed;
   last = now;
   while (acc >= 1 / 30) { game.step(1 / 30); acc -= 1 / 30; }
   render(ctx, game);
@@ -230,3 +299,9 @@ function frame(now: number) {
 }
 fit();
 requestAnimationFrame(frame);
+
+if (import.meta.env.DEV) {
+  Object.assign(window, {
+    walker: { get game() { return game; }, get stt() { return stt; }, get decider() { return decider; }, say: (t: string) => handleText(t, performance.now()) },
+  });
+}

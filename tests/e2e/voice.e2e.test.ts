@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { buildState, CASES, fixtureName, SCENARIOS, satisfies, VOICES } from "./scenarios";
 import { loadAsr, loadDecider, NodeStt, readWav } from "./node-models";
@@ -19,6 +20,7 @@ beforeAll(async () => {
 
 afterAll(() => {
   const act = seen.filter((s) => s.status === "act").length;
+  writeFileSync(new URL("../../.cache/e2e-confidence.txt", import.meta.url).pathname, JSON.stringify(seen, null, 1));
   console.log(`CONFIDENCE: ${act}/${seen.length} acted at 70% or more, ${seen.filter((s) => s.status === "confirm").length} would ask first`);
   for (const s of seen.filter((s) => s.status !== "act")) console.log(`  ${s.status} ${Math.round(s.conf * 100)}% "${s.text}"`);
 });

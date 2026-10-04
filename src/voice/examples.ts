@@ -34,6 +34,14 @@ export function examplesFor(g: Game): Example[] {
     { group: "Hero", text: `**attack** the **strongest** one`, expect: { kind: "exact", command: { kind: "attack", mode: "strongest" } } },
     { group: "Hero", text: `**attack** the **nearest** enemy`, expect: { kind: "exact", command: { kind: "attack", mode: "nearest" } } },
     { group: "Hero", text: `**stop**, hold position`, expect: { kind: "exact", command: { kind: "hold" } } },
+    { group: "Hero", text: `**go left**`, expect: { kind: "exact", command: { kind: "nudge", dir: "left" } } },
+    { group: "Hero", text: `**patrol** the path`, expect: { kind: "exact", command: { kind: "patrol" } } },
+    { group: "Fix a mistake", text: `**undo** that`, expect: { kind: "exact", command: { kind: "undo" } } },
+    { group: "Fix a mistake", text: `do that **again**`, expect: { kind: "exact", command: { kind: "repeat" } } },
+    { group: "Game", text: `**pause** the game`, expect: { kind: "exact", command: { kind: "pause" } } },
+    { group: "Game", text: `**resume**`, expect: { kind: "exact", command: { kind: "resume" } } },
+    { group: "Game", text: `**speed** it up`, expect: { kind: "exact", command: { kind: "speed", fast: true } } },
+    { group: "Game", text: `call the **next wave**`, expect: { kind: "exact", command: { kind: "nextwave" } } },
   ];
 }
 

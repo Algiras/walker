@@ -1,3 +1,4 @@
+import { describeCommand } from "../game/commands";
 import { Game } from "../game/sim";
 import { Command } from "../game/commands";
 
@@ -35,7 +36,19 @@ export function actionOptions(g: Game): Option[] {
   if (!at(g.map.base.x, g.map.base.y)) out.push({ key: "move_base", text: "go to the base, just walk there (retreat, go home)", value: { kind: "move", to: { type: "base" } } });
   if (!at(g.map.spawn.x, g.map.spawn.y)) out.push({ key: "move_spawn", text: "go to the spawn, just walk there (where enemies come from)", value: { kind: "move", to: { type: "spawn" } } });
 
-  out.push({ key: "hold", text: "stop and hold position", value: { kind: "hold" } });
+  for (const dir of ["left", "right", "up", "down"] as const) {
+    out.push({ key: `nudge_${dir}`, text: `walk the hero a few tiles ${dir}`, value: { kind: "nudge", dir } });
+  }
+  out.push({ key: "patrol", text: "patrol the path, walking back and forth from the spawn to the base", value: { kind: "patrol" } });
+
+  out.push({ key: "hold", text: "stop and hold position, cancel the current order", value: { kind: "hold" } });
+  out.push({ key: "undo", text: "undo or revert the last action", value: { kind: "undo" } });
+  out.push({ key: "repeat", text: `do the last command again${g.last ? ` (${describeCommand(g.last)})` : ""}`, value: { kind: "repeat" } });
+  out.push({ key: "pause", text: "pause the game", value: { kind: "pause" } });
+  out.push({ key: "resume", text: "resume the paused game", value: { kind: "resume" } });
+  out.push({ key: "speed_up", text: "speed the game up, double speed", value: { kind: "speed", fast: true } });
+  out.push({ key: "speed_down", text: "slow the game back to normal speed", value: { kind: "speed", fast: false } });
+  out.push({ key: "nextwave", text: "call the next wave early for bonus gold", value: { kind: "nextwave" } });
   out.push({ key: "none", text: NONE, value: null });
   return out;
 }

@@ -74,3 +74,21 @@ details.card[open] summary { margin-bottom: 4px; }
   aside { display: block; overflow: visible; }
   .sub { display: none; }
 }
+
+.link { color: var(--muted); text-decoration: none; font-size: 13px; }
+.link:hover { color: var(--accent); }
+.flags { color: var(--accent); font-weight: 600; }
+canvas { cursor: crosshair; }
+
+.ctl { display: grid; gap: 6px; margin-top: 8px; grid-template-columns: repeat(5, 1fr); }
+.ctl button { padding: 4px 2px; font-size: 12.5px; white-space: nowrap; }
+.ctl.attack { grid-template-columns: auto repeat(4, 1fr); align-items: center; }
+.ctl.attack span { font-size: 12px; color: var(--muted); margin-right: 2px; }
+.ctl.game { grid-template-columns: repeat(4, 1fr) 1.7fr 1fr 1.3fr; }
+.ctl button.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+
+.menu { position: absolute; z-index: 5; min-width: 190px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+.menu[hidden] { display: none; }
+.menu-title { font-size: 12px; color: var(--muted); padding: 2px 6px 6px; }
+.menu button { display: flex; justify-content: space-between; width: 100%; margin: 2px 0; text-align: left; padding: 5px 8px; font-size: 13px; }
+.menu button em { font-style: normal; color: var(--muted); }

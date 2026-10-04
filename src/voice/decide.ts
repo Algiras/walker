@@ -1,22 +1,11 @@
 import { Command, describeCommand } from "../game/commands";
 import { Game } from "../game/sim";
 import { actionOptions } from "./context";
-import { hintFrom } from "./rules";
-import { mismatch } from "./guard";
-import { cleanTranscript, gateOptions, normalize } from "./verbs";
+import { hintFrom, ruleParse, worldOf } from "./rules";
+import { ACT_CONFIDENCE, AGREEMENT_CONFIDENCE, Decision, settle } from "./settle";
+import { cleanTranscript, gateOptions, hasEvidence, intents, normalize } from "./verbs";
 
-/** act: go ahead. confirm: probably right but not sure enough, ask first. reject: not understood or not allowed. */
-export type Status = "act" | "confirm" | "reject";
-
-export interface Decision {
-  command: Command | null;
-  confidence: number;
-  status: Status;
-  /** Why it was held back, in words for the player. */
-  note?: string;
-  trace: string;
-  ms: number;
-}
+export type { Decision, Status } from "./settle";
 
 export interface Decider {
   readonly name: string;
@@ -31,19 +20,14 @@ export interface PickRequest {
 /** Probability of each option, in the order given. */
 export type PickFn = (req: PickRequest) => Promise<number[]>;
 
-/** At or above this the hero acts. Between MIN and this it asks first. Below MIN it asks the player to repeat. */
-export const ACT_CONFIDENCE = 0.7;
-export const MIN_CONFIDENCE = 0.25;
-
-/** Applies the confidence thresholds and the build/upgrade guard to a chosen command. */
-export function settle(text: string, command: Command | null, confidence: number, game: Game): Pick<Decision, "status" | "note" | "command"> {
-  if (!command || confidence < MIN_CONFIDENCE) return { command: null, status: "reject", note: "I did not catch that. Say it again?" };
-  const wrong = mismatch(text, command, game);
-  if (wrong) return { command: null, status: "reject", note: wrong };
-  if (confidence < ACT_CONFIDENCE) return { command, status: "confirm", note: `I am only ${Math.round(confidence * 100)}% sure.` };
-  return { command, status: "act" };
-}
 const pct = (x: number) => `${Math.round(x * 100)}%`;
+
+/** What to tell the player when the words point at an action that cannot exist right now. */
+function nothingTo(text: string): string {
+  const found = intents(text);
+  if (found.includes("sell")) return "There is no tower there to sell.";
+  return "That is not possible right now.";
+}
 
 /** Jev-style decider: one calibrated pick-one over every plausible action in the current game state. */
 export class PickDecider implements Decider {
@@ -53,22 +37,35 @@ export class PickDecider implements Decider {
   async decide(heard: string, game: Game): Promise<Decision> {
     const text = cleanTranscript(heard);
     const t0 = performance.now();
+    const evidence = hasEvidence(text);
+    if (!evidence && text.split(/\s+/).filter(Boolean).length <= 2) {
+      return { command: null, confidence: 0, status: "reject", note: "I did not catch that. Say it again?", trace: "nothing to act on in that", ms: performance.now() - t0 };
+    }
     const opts = gateOptions(actionOptions(game), text);
-    const req = { utterance: text, context: game.summary() };
-    const probs = await this.pick({ ...req, options: opts });
+    if (!opts.length) return { command: null, confidence: 0, status: "reject", note: nothingTo(text), trace: "no legal action matches", ms: performance.now() - t0 };
+
+    const probs = await this.pick({ utterance: text, context: game.summary(), options: opts });
     const index = probs.indexOf(Math.max(...probs));
     const chosen = opts[index];
     // How decisively the winner beats the runner-up. Raw probability understates certainty when
     // several near-identical options (every build, every upgrade) share the remaining mass.
     const runnerUp = Math.max(0, ...probs.filter((_, i) => i !== index));
-    const conf = probs[index] / (probs[index] + runnerUp);
-    const done = (command: Command | null, trace: string): Decision => ({ ...settle(text, command, conf, game), confidence: conf, trace, ms: performance.now() - t0 });
+    const margin = probs[index] / (probs[index] + runnerUp);
 
-    if (chosen.value === null) return done(null, `${pct(conf)} ${chosen.text}`);
+    let command: Command | null = null;
+    let what = `${pct(margin)} ${chosen.text}`;
     if (chosen.value === "auto") {
-      const best = game.bestCandidate(hintFrom(normalize(text)));
-      return done(best?.command ?? null, `${pct(conf)} game chose ${best ? describeCommand(best.command) : "nothing"}`);
+      command = game.bestCandidate(hintFrom(normalize(text)))?.command ?? null;
+      what = `${pct(margin)} game chose ${command ? describeCommand(command) : "nothing"}`;
+    } else if (chosen.value) {
+      command = chosen.value;
+      what = `${pct(margin)} ${describeCommand(command)}`;
     }
-    return done(chosen.value, `${pct(conf)} ${describeCommand(chosen.value)}`);
+
+    const byRules = ruleParse(text, worldOf(game));
+    const agree = !!command && !!byRules && JSON.stringify(byRules) === JSON.stringify(command);
+    // Without a single keyword to anchor it, a guess may be offered for confirmation but never acted on.
+    const confidence = agree ? Math.max(margin, AGREEMENT_CONFIDENCE) : evidence ? margin : Math.min(margin, ACT_CONFIDENCE - 0.01);
+    return { ...settle(text, command, confidence, game), confidence, trace: agree ? `${what} · keywords agree` : what, ms: performance.now() - t0 };
   }
 }

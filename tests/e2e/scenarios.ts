@@ -11,6 +11,7 @@ export interface Scenario {
   gold: number;
   /** Seconds simulated first, so enemies are on the field. */
   warmup: number;
+  last?: Command;
 }
 
 /** Where the hero stands: away from every pad, the base and the spawn, so no transition is pruned by position. */
@@ -18,7 +19,7 @@ const CENTER = { x: 9, y: 5.5 };
 
 export const SCENARIOS = {
   /** Seed 7, one tower on the second pad, a wave walking in. The state the Try-saying examples are written for. */
-  midgame: { seed: 7, towers: [{ pad: 1, level: 1 }], gold: 100, warmup: 9 },
+  midgame: { seed: 7, towers: [{ pad: 1, level: 1 }], gold: 100, warmup: 9, last: { kind: "attack", mode: "nearest" } },
   /** Seed 21, nothing built yet, nothing on the field. */
   opening: { seed: 21, towers: [], gold: 100, warmup: 0 },
   /** Seed 21, three towers up and gold to spare. */
@@ -37,6 +38,7 @@ export function buildState(s: Scenario): Game {
   g.gold = s.gold;
   g.hero.order = { type: "idle" };
   g.hero.pos = { ...CENTER };
+  g.last = s.last ?? null;
   return g;
 }
 

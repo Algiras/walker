@@ -1,15 +1,23 @@
 import { GameMap, Vec, pathLength, pointAt } from "./map";
-import { Command, FocusMode, Place } from "./commands";
+import { Command, describeCommand, FocusMode, META, Place } from "./commands";
 import { mulberry32, Rng } from "./rng";
 
 export interface Enemy { id: number; kind: "grunt" | "fast" | "tank"; d: number; hp: number; maxHp: number; speed: number; reward: number }
 /** A tower's id is the number of the pad slot it stands on, so "tower 3" and pad 3 are the same thing. */
 export interface Tower { id: number; pad: string; pos: Vec; level: number; cd: number; spent: number }
 export interface Beam { from: Vec; to: Vec; ttl: number; hero: boolean }
-type Order =
+export type Order =
   | { type: "idle" }
   | { type: "move"; to: Vec; label: string; then?: Command }
+  | { type: "patrol"; leg: 0 | 1 }
   | { type: "attack"; mode: FocusMode; target?: number };
+
+/** How to take back one change. Pushed when it happens, popped by undo. */
+type Undo =
+  | { type: "order"; previous: Order; what: string }
+  | { type: "build"; pad: string; cost: number }
+  | { type: "upgrade"; pad: string; cost: number }
+  | { type: "sell"; pad: string; level: number; spent: number; refund: number };
 
 export const COSTS = { build: 50, upgrade: [40, 70], refund: 0.6 };
 export const MAX_LEVEL = COSTS.upgrade.length + 1;
@@ -31,6 +39,8 @@ export interface Hint { area?: string; near?: "base" | "spawn"; pressure?: boole
 const HERO = { speed: 3.2, range: 2.1, damage: 9, cooldown: 0.45 };
 const TOWER = { range: 2.6, damage: 5, cooldown: 0.7 };
 const ARRIVE = 0.15;
+const NUDGE = 3;
+const HISTORY = 30;
 
 export class Game {
   map: GameMap;
@@ -46,6 +56,10 @@ export class Game {
   time = 0;
   log: string[] = [];
   state: "playing" | "lost" = "playing";
+  paused = false;
+  speed: 1 | 2 = 1;
+  last: Command | null = null;
+  private history: Undo[] = [];
   private nextId = 1;
   private spawnQueue: { at: number; kind: Enemy["kind"] }[] = [];
   private waveTimer = 4;
@@ -74,6 +88,7 @@ export class Game {
   say(msg: string) { this.log.push(msg); if (this.log.length > 50) this.log.shift(); }
 
   resolve(p: Place): { pos: Vec; label: string } | undefined {
+    if (p.type === "point") return { pos: { x: p.x, y: p.y }, label: "that spot" };
     if (p.type === "base") return { pos: this.map.base, label: "base" };
     if (p.type === "spawn") return { pos: this.map.spawn, label: "spawn" };
     const pad = this.padByName(p.name);
@@ -98,8 +113,24 @@ export class Game {
         return this.gold < cost ? `Not enough gold: upgrading costs ${cost}, you have ${this.gold}.` : null;
       }
       case "sell": return this.towerAt(c.pad) ? null : `There is no tower at ${c.pad} to sell.`;
+      case "nextwave": return this.spawnQueue.length ? "The current wave is still arriving." : null;
+      case "pause": return this.paused ? "Already paused." : null;
+      case "resume": return this.paused ? null : "Not paused.";
+      case "undo": return this.history.length ? null : "Nothing to undo.";
+      case "repeat": return this.last ? null : "There is nothing to repeat yet.";
       default: return null;
     }
+  }
+
+  private order(o: Order, what: string) {
+    this.history.push({ type: "order", previous: this.hero.order, what });
+    if (this.history.length > HISTORY) this.history.shift();
+    this.hero.order = o;
+  }
+
+  private remember(u: Undo) {
+    this.history.push(u);
+    if (this.history.length > HISTORY) this.history.shift();
   }
 
   command(c: Command): Outcome {
@@ -109,25 +140,94 @@ export class Game {
       return { ok: false, message: no };
     }
     const ok = (message: string): Outcome => ({ ok: true, message });
+    if (!META.includes(c.kind)) this.last = c;
     switch (c.kind) {
       case "hold":
-        this.hero.order = { type: "idle" };
+        this.order({ type: "idle" }, "hold position");
         return ok("Holding position.");
       case "attack":
-        this.hero.order = { type: "attack", mode: c.mode };
+        this.order({ type: "attack", mode: c.mode }, `attack ${c.mode}`);
         return ok(`Attacking the ${c.mode} enemy.`);
+      case "patrol":
+        this.order({ type: "patrol", leg: 1 }, "patrol");
+        return ok("Patrolling the path.");
+      case "nudge": {
+        const to = this.nudged(c.dir);
+        this.order({ type: "move", to, label: c.dir }, `move ${c.dir}`);
+        return ok(`Moving ${c.dir}.`);
+      }
       case "move": {
         const t = this.resolve(c.to);
         if (!t) return { ok: false, message: "No such place." };
-        this.hero.order = { type: "move", to: t.pos, label: t.label };
+        this.order({ type: "move", to: t.pos, label: t.label }, `move to ${t.label}`);
         return ok(`Moving to ${t.label}.`);
       }
+      case "pause":
+        this.paused = true;
+        return ok("Paused.");
+      case "resume":
+        this.paused = false;
+        return ok("Resumed.");
+      case "speed":
+        this.speed = c.fast ? 2 : 1;
+        return ok(c.fast ? "Double speed." : "Normal speed.");
+      case "nextwave": {
+        const bonus = Math.max(0, Math.ceil(this.waveTimer * 3));
+        this.planWave();
+        this.waveTimer = 6;
+        this.gold += bonus;
+        return ok(bonus ? `Wave ${this.wave} called early. +${bonus} gold.` : `Wave ${this.wave} called.`);
+      }
+      case "undo":
+        return this.undo();
+      case "repeat":
+        return this.command(this.last!);
       default: {
         const pad = this.padByName(c.pad)!;
-        this.hero.order = { type: "move", to: pad.pos, label: pad.name, then: c };
+        this.order({ type: "move", to: pad.pos, label: pad.name, then: c }, `${c.kind} at ${pad.name}`);
         return ok(`Heading to ${pad.name} to ${c.kind}.`);
       }
     }
+  }
+
+  private nudged(dir: "left" | "right" | "up" | "down"): Vec {
+    const d = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[dir];
+    const clamp = (v: number, hi: number) => Math.min(hi - 0.5, Math.max(0.5, v));
+    return { x: clamp(this.hero.pos.x + d[0] * NUDGE, this.map.w), y: clamp(this.hero.pos.y + d[1] * NUDGE, this.map.h) };
+  }
+
+  /** Takes back the most recent change: a hero order that is still running, or a completed build, upgrade or sale. */
+  undo(): Outcome {
+    for (let guard = 0; guard < HISTORY; guard++) {
+      const u = this.history[this.history.length - 1];
+      if (!u) return { ok: false, message: "Nothing to undo." };
+      if (u.type === "order") {
+        this.history.pop();
+        this.hero.order = u.previous;
+        return { ok: true, message: `Cancelled: ${u.what}.` };
+      }
+      const t = this.towerAt(u.pad);
+      if (u.type === "sell") {
+        if (this.gold < u.refund) return { ok: false, message: `Not enough gold to take the sale back: you need ${u.refund}.` };
+        this.history.pop();
+        this.gold -= u.refund;
+        const back = this.addTower(u.pad, u.level);
+        back.spent = u.spent;
+        return { ok: true, message: `Tower ${back.id} at ${u.pad} is back, level ${u.level}.` };
+      }
+      this.history.pop();
+      if (!t) continue;
+      if (u.type === "build") {
+        this.towers = this.towers.filter((x) => x !== t);
+        this.gold += u.cost;
+        return { ok: true, message: `Reverted: removed tower ${t.id} at ${u.pad}, refunded ${u.cost}.` };
+      }
+      t.level--;
+      t.spent -= u.cost;
+      this.gold += u.cost;
+      return { ok: true, message: `Reverted: tower ${t.id} at ${u.pad} is back to level ${t.level}, refunded ${u.cost}.` };
+    }
+    return { ok: false, message: "Nothing to undo." };
   }
 
   private finish(c: Command) {
@@ -139,6 +239,7 @@ export class Game {
     if (c.kind === "build") {
       this.gold -= COSTS.build;
       const t = this.addTower(c.pad);
+      this.remember({ type: "build", pad: c.pad, cost: COSTS.build });
       this.say(`Built tower ${t.id} at ${c.pad}.`);
     } else if (c.kind === "upgrade") {
       const t = this.towerAt(c.pad)!;
@@ -146,11 +247,13 @@ export class Game {
       this.gold -= cost;
       t.spent += cost;
       t.level++;
+      this.remember({ type: "upgrade", pad: c.pad, cost });
       this.say(`Upgraded tower ${t.id} at ${c.pad} to level ${t.level}.`);
     } else if (c.kind === "sell") {
       const t = this.towerAt(c.pad)!;
       const value = this.sellValue(t);
       this.gold += value;
+      this.remember({ type: "sell", pad: c.pad, level: t.level, spent: t.spent, refund: value });
       this.towers = this.towers.filter((x) => x !== t);
       this.say(`Sold tower ${t.id} at ${c.pad} for ${value} gold.`);
     }
@@ -187,7 +290,7 @@ export class Game {
   }
 
   step(dt: number) {
-    if (this.state !== "playing") return;
+    if (this.state !== "playing" || this.paused) return;
     this.time += dt;
 
     this.waveTimer -= dt;
@@ -234,6 +337,10 @@ export class Game {
         const p = this.enemyPos(focus);
         if (dist(h.pos, p) > HERO.range * 0.9) this.walk(p, dt);
       }
+    } else if (o.type === "patrol") {
+      const goal = o.leg ? this.map.base : this.map.spawn;
+      if (dist(h.pos, goal) <= ARRIVE) o.leg = o.leg ? 0 : 1;
+      else this.walk(goal, dt);
     } else if (o.type === "move") {
       if (dist(h.pos, o.to) <= ARRIVE) {
         h.order = { type: "idle" };
@@ -349,6 +456,11 @@ export class Game {
       if (busiest > 0) return { verdict: "poor", note: `Tower ${this.towerAt(c.pad)!.id} sees no enemies while another tower sees ${busiest}.` };
       return { verdict: "ok", note: "No enemies yet, so this is an investment." };
     }
+    if (c.kind === "nextwave") {
+      if (!this.towers.length) return { verdict: "poor", note: "You have no towers yet." };
+      if (this.enemies.length) return { verdict: "poor", note: `${this.enemies.length} enemies are still on the field.` };
+      return { verdict: "good", note: "The field is clear, so calling early earns bonus gold." };
+    }
     if (c.kind === "sell") {
       const s = of(c.pad);
       if (this.towers.length === 1 && this.enemies.length) return { verdict: "poor", note: "That is your only tower and enemies are on the field." };
@@ -363,13 +475,14 @@ export class Game {
     const kinds = ["fast", "tank", "grunt"].map((k) => [k, this.enemies.filter((e) => e.kind === k).length] as const).filter(([, n]) => n);
     const enemies = this.enemies.length ? `${this.enemies.length} enemies (${kinds.map(([k, n]) => `${n} ${k}`).join(", ")})` : "no enemies right now";
     const towers = this.towers.length ? this.towers.map((t) => `#${t.id} ${t.pad} L${t.level}`).join(", ") : "none";
-    return `Wave ${this.wave}. Gold ${this.gold} (build ${COSTS.build}, upgrade ${COSTS.upgrade.join("/")}). Base health ${this.baseHp}. Towers: ${towers}. ${enemies}. Hero is ${this.orderText()}.`;
+    return `Wave ${this.wave}. Gold ${this.gold} (build ${COSTS.build}, upgrade ${COSTS.upgrade.join("/")}). Base health ${this.baseHp}. Towers: ${towers}. ${enemies}. Hero is ${this.orderText()}.${this.paused ? " The game is paused." : ""}${this.speed === 2 ? " Double speed." : ""}${this.last ? ` Last command: ${describeCommand(this.last)}.` : ""}`;
   }
 
   orderText(): string {
     const o = this.hero.order;
     if (o.type === "idle") return "idle";
     if (o.type === "attack") return `attacking ${o.mode}`;
+    if (o.type === "patrol") return "patrolling";
     return `moving to ${o.label}${o.then ? ` to ${o.then.kind}` : ""}`;
   }
 }
