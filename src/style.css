@@ -20,6 +20,7 @@
   --bg: var(--d60); --card: var(--d80); --ink: var(--d10); --muted: var(--d30); --line: var(--d50);
   --accent: var(--b10); --accent-hover: var(--b20); --accent-soft: var(--b40); --accent-ink: #0b1620;
   --accent-text: var(--b50); --accent-text-hover: var(--b60); --ring: var(--b50);
+  --fill: #116dff; --fill-hover: #0b5cd6; --on-fill: #ffffff;
   --warn: var(--r10); --ok: var(--g10); --ok-text: var(--g20);
   --sk1: #e7ecf0; --sk2: #f6f8fa;
   --shadow: 0 1px 2px rgba(22, 45, 61, .06);
@@ -31,6 +32,7 @@
     --bg: #101820; --card: #19232e; --ink: #e8edf2; --muted: #93a0b0; --line: #2a3745;
     --accent: #5aaef0; --accent-hover: #7cc0f5; --accent-soft: #1d3346; --accent-ink: #0b1620;
     --accent-text: var(--accent); --accent-text-hover: var(--accent-hover); --ring: var(--accent);
+    --fill: var(--accent); --fill-hover: var(--accent-hover); --on-fill: var(--accent-ink);
     --ok-text: var(--ok);
     --sk1: #243240; --sk2: #2e3e4e; --shadow: none;
   }
@@ -89,9 +91,9 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4p
 button { font: 500 14px/18px var(--font-text); padding: 6px var(--sp2); border-radius: var(--pill); border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; touch-action: manipulation; transition: border-color .12s, background .12s, color .12s; }
 @media (hover: hover) { button:hover:not(:disabled):not([aria-disabled="true"]) { border-color: var(--accent); color: var(--accent-text); background: var(--accent-soft); } }
 button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, canvas:focus-visible, a:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-button.primary, button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+button.primary, button[aria-pressed="true"] { background: var(--fill); color: var(--on-fill); border-color: transparent; }
 button.primary { font-weight: 600; }
-@media (hover: hover) { button.primary:hover:not(:disabled), button[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent-hover); color: var(--accent-ink); } }
+@media (hover: hover) { button.primary:hover:not(:disabled), button[aria-pressed="true"]:hover:not(:disabled) { background: var(--fill-hover); color: var(--on-fill); } }
 button:disabled { opacity: .55; cursor: default; }
 
 /* hero controls */

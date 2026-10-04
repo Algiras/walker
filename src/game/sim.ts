@@ -56,7 +56,7 @@ export class Game {
   baseHp = 20;
   wave = 0;
   time = 0;
-  /** Everything the game has said, oldest first. The page shows it by index, so entries are never dropped. */
+  /** Everything the game has said, oldest first. */
   log: string[] = [];
   state: "playing" | "lost" = "playing";
   paused = false;
