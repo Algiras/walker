@@ -4,7 +4,7 @@ import { PickFn } from "./decide";
 env.allowLocalModels = false;
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const SYSTEM = "You are a precise classifier for a tower defense game. The player speaks to their hero; the speech is transcribed and may contain recognition errors. Answer with exactly one letter.";
+const SYSTEM = "You are the decision engine of a tower defense game. The player speaks to their hero. The speech is transcribed and may contain recognition errors. You choose exactly one option and answer with its letter only.";
 
 export interface LlmOptions {
   model: string;
@@ -26,9 +26,10 @@ export async function loadPicker(o: LlmOptions): Promise<PickFn> {
   const names: string[] = (model as unknown as { sessions: Record<string, { inputNames: string[] }> }).sessions.model?.inputNames ?? [];
   const keepOne = names.includes("num_logits_to_keep");
 
-  const pick: PickFn = async (utterance, question, options) => {
+  const pick: PickFn = async ({ utterance, question, guide, context, options }) => {
     const body = options.map((t, i) => `${LETTERS[i]}. ${t}`).join("\n");
-    const user = `Player said: "${utterance}"\n\n${question}\n${body}\n\nAnswer with one letter.`;
+    const rules = guide.map((g) => `- ${g}`).join("\n");
+    const user = `Game state: ${context}\n\nRules:\n${rules}\n\nPlayer said: "${utterance}"\n\n${question}\n${body}\n\nAnswer with one letter.`;
     const prompt = tokenizer.apply_chat_template(
       [{ role: "system", content: SYSTEM }, { role: "user", content: user }],
       { add_generation_prompt: true, tokenize: false },
@@ -47,6 +48,6 @@ export async function loadPicker(o: LlmOptions): Promise<PickFn> {
     return { index: probs.indexOf(Math.max(...probs)), probs };
   };
 
-  await pick("warm up", "Which?", ["one", "two"]);
+  await pick({ utterance: "warm up", question: "Which?", guide: [], context: "", options: ["one", "two"] });
   return pick;
 }

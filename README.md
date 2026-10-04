@@ -25,6 +25,21 @@ There is also a text box that goes through the same decision step, and a keyword
 
 Needs a Chromium-based browser with WebGPU for a comfortable speed. On other browsers it falls back to wasm, which is much slower.
 
+## What to say
+
+The decision step handles named pads, goals and "you choose". Keywords carry the decision; the page's **Try saying** card shows live examples for the current map.
+
+| You want | Say something with | Example |
+|---|---|---|
+| A specific tower | `build` / `upgrade` + a pad name | "build a tower at Bravo" |
+| A tower by goal | `defend` / `protect` + `base`, `spawn`, `left`/`right`/`top`/`bottom`, or `where the enemies are` | "defend the base", "stop them early near the spawn" |
+| The game to choose | `more defense`, `stronger`, `reinforce` with no place | "we need more defense" |
+| Move the hero | `go to` / `retreat` + a pad, `base` or `spawn` | "go to Charlie" |
+| Focus fire | `attack` + `nearest` / `strongest` / `weakest` / `first` | "attack the strongest one" |
+| Stop | `stop` / `hold` | "stop, hold position" |
+
+For build and upgrade the model sees one legal action per pad (build if empty, upgrade if occupied), each annotated with path coverage, how far along the path it is, enemies in range now and cost, plus an explicit "choose the best spot for me" option that the game resolves with a heuristic.
+
 ## How a command flows
 
 ```

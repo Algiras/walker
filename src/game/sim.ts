@@ -11,6 +11,18 @@ type Order =
   | { type: "attack"; mode: FocusMode; target?: number };
 
 export const COSTS = { build: 50, upgrade: 40 };
+
+export interface PadStats {
+  name: string;
+  where: string;
+  level: number;
+  coverage: number;
+  progress: number;
+  threat: number;
+}
+
+export interface Candidate { command: Command; label: string; score: number; affordable: boolean; stats: PadStats }
+export interface Hint { area?: string; near?: "base" | "spawn"; pressure?: boolean }
 const HERO = { speed: 3.2, range: 2.1, damage: 9, cooldown: 0.45 };
 const TOWER = { range: 2.6, damage: 5, cooldown: 0.7 };
 const ARRIVE = 0.15;
@@ -204,6 +216,59 @@ export class Game {
     if (e.hp <= 0) this.gold += e.reward;
   }
 
+  /** How well a pad covers the path: tiles of path within range, where along the path that is, and enemies in range now. */
+  padStats(): PadStats[] {
+    return this.map.pads.map((p) => {
+      const t = this.towerAt(p.name);
+      const range = TOWER.range + ((t?.level ?? 1) - 1) * 0.3;
+      let covered = 0, mid = 0;
+      const step = 0.25;
+      for (let d = 0; d <= this.total; d += step) {
+        if (dist(p.pos, pointAt(this.map.path, d)) <= range) { covered += step; mid += d * step; }
+      }
+      const threat = this.enemies.filter((e) => dist(p.pos, this.enemyPos(e)) <= range).length;
+      return { name: p.name, where: p.where, level: t?.level ?? 0, coverage: covered, progress: covered ? mid / covered / this.total : 0.5, threat };
+    });
+  }
+
+  /** One legal concrete action per pad (build if empty, upgrade if occupied), with a heuristic score. */
+  candidates(): Candidate[] {
+    return this.padStats().map((s) => {
+      const value = s.coverage + 4 * s.threat;
+      const where = `${s.where}; covers ${s.coverage.toFixed(1)} tiles of path, ${progressWord(s.progress)}; ${s.threat} enemies in range now`;
+      if (s.level === 0) {
+        return { command: { kind: "build", pad: s.name }, label: `build a tower at ${s.name} (${where})`, score: value + 2, affordable: this.gold >= COSTS.build, stats: s };
+      }
+      return {
+        command: { kind: "upgrade", pad: s.name },
+        label: `upgrade the tower at ${s.name} (level ${s.level} to ${s.level + 1}; ${where})`,
+        score: (value * 0.8) / s.level,
+        affordable: this.gold >= COSTS.upgrade,
+        stats: s,
+      };
+    });
+  }
+
+  /** The game's own pick for "you choose", steered by whatever area or goal the player hinted at. */
+  bestCandidate(hint: Hint = {}): Candidate | undefined {
+    let pool = this.candidates();
+    const ok = pool.filter((c) => c.affordable);
+    if (ok.length) pool = ok;
+    if (hint.area) {
+      const inArea = pool.filter((c) => c.stats.where.includes(hint.area!));
+      if (inArea.length) pool = inArea;
+    }
+    const bonus = (c: Candidate) =>
+      (hint.near === "base" ? c.stats.progress * 20 : 0) + (hint.near === "spawn" ? (1 - c.stats.progress) * 20 : 0) + (hint.pressure ? c.stats.threat * 10 : 0);
+    return pool.reduce<Candidate | undefined>((a, b) => (!a || b.score + bonus(b) > a.score + bonus(a) ? b : a), undefined);
+  }
+
+  summary(): string {
+    const kinds = ["fast", "tank", "grunt"].map((k) => [k, this.enemies.filter((e) => e.kind === k).length] as const).filter(([, n]) => n);
+    const enemies = this.enemies.length ? `${this.enemies.length} enemies (${kinds.map(([k, n]) => `${n} ${k}`).join(", ")})` : "no enemies right now";
+    return `Wave ${this.wave}. Gold ${this.gold} (build ${COSTS.build}, upgrade ${COSTS.upgrade}). Base health ${this.baseHp}. ${enemies}. Hero is ${this.orderText()}.`;
+  }
+
   orderText(): string {
     const o = this.hero.order;
     if (o.type === "idle") return "idle";
@@ -212,4 +277,5 @@ export class Game {
   }
 }
 
+export const progressWord = (p: number) => (p < 0.34 ? "near the spawn" : p > 0.66 ? "near the base" : "midway along the path");
 export const dist = (a: Vec, b: Vec) => Math.hypot(a.x - b.x, a.y - b.y);

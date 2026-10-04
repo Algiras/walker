@@ -1,5 +1,5 @@
 import { Command, FocusMode, Place } from "../game/commands";
-import { Game } from "../game/sim";
+import { Game, Hint } from "../game/sim";
 import { Decider, Decision } from "./decide";
 
 const lev = (a: string, b: string) => {
@@ -16,19 +16,37 @@ const closeEnough = (a: string, b: string) => {
   return d <= 2 && d / Math.max(a.length, b.length) <= 0.4;
 };
 
-const has =(s: string, re: RegExp) => re.test(s);
+const has = (s: string, re: RegExp) => re.test(s);
 
-export function ruleParse(text: string, padNames: string[]): Command | null {
+export interface RuleWorld {
+  padNames: string[];
+  hasTower: (pad: string) => boolean;
+  best: (hint: Hint) => Command | null;
+}
+
+export function hintFrom(s: string): Hint {
+  const area = s.match(/\b(left|right|top|bottom|middle|center|centre)\b/)?.[1];
+  return {
+    area: area === "centre" ? "center" : area,
+    near: has(s, /\b(spawn|entrance|early|start)\b/) ? "spawn" : has(s, /\b(base|home|last line)\b/) ? "base" : undefined,
+    pressure: has(s, /\b(pressure|under attack|where (they|the enemies|enemies) (are|come))\b/),
+  };
+}
+
+export function ruleParse(text: string, w: RuleWorld): Command | null {
   const s = text.toLowerCase().replace(/[^a-z\s]/g, " ");
   const words = s.split(/\s+/).filter(Boolean);
-  const pad = padNames.find((n) => words.some((w) => w === n.toLowerCase() || (w.length > 3 && closeEnough(w, n.toLowerCase()))));
+  const pad = w.padNames.find((n) => words.some((x) => x === n.toLowerCase() || (x.length > 3 && closeEnough(x, n.toLowerCase()))));
   const place: Place | null = pad
     ? { type: "pad", name: pad }
     : has(s, /\b(base|home|retreat|fall back)\b/) ? { type: "base" }
     : has(s, /\b(spawn|entrance|start)\b/) ? { type: "spawn" } : null;
 
-  if (has(s, /\b(upgrade|improve|strengthen|level up)\b/) && pad) return { kind: "upgrade", pad };
-  if (has(s, /\b(build|place|construct|put|create|make)\b/) && pad) return { kind: "build", pad };
+  const defend = has(s, /\b(build|place|construct|put|create|make|add|upgrade|improve|strengthen|reinforce|defend|defense|defence|protect|cover|tower|towers)\b/);
+  if (defend) {
+    if (pad) return w.hasTower(pad) ? { kind: "upgrade", pad } : { kind: "build", pad };
+    return w.best(hintFrom(s));
+  }
   if (has(s, /\b(attack|kill|shoot|fight|target|focus|hit)\b/)) {
     const mode: FocusMode = has(s, /\b(strong|strongest|big|biggest|tank|tough)\b/) ? "strongest"
       : has(s, /\b(weak|weakest|small|smallest|low)\b/) ? "weakest"
@@ -45,7 +63,11 @@ export class RuleDecider implements Decider {
   readonly name = "keyword rules";
   async decide(text: string, game: Game): Promise<Decision> {
     const t0 = performance.now();
-    const command = ruleParse(text, game.map.pads.map((p) => p.name));
+    const command = ruleParse(text, {
+      padNames: game.map.pads.map((p) => p.name),
+      hasTower: (n) => !!game.towerAt(n),
+      best: (hint) => game.bestCandidate(hint)?.command ?? null,
+    });
     return { command, confidence: command ? 1 : 0, trace: "keyword match", ms: performance.now() - t0 };
   }
 }

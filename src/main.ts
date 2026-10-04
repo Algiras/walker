@@ -7,6 +7,7 @@ import { Parakeet } from "./voice/asr";
 import { loadPicker } from "./voice/llm";
 import { Decider, PickDecider } from "./voice/decide";
 import { RuleDecider } from "./voice/rules";
+import { examplesFor } from "./voice/examples";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const params = new URLSearchParams(location.search);
@@ -28,6 +29,28 @@ function newGame(seed = Math.floor(Math.random() * 1e6)) {
   $("log").innerHTML = "";
   $("banner").hidden = true;
   $("decider").textContent = `Decision engine: ${decider.name}`;
+  showExamples();
+}
+
+function showExamples() {
+  const box = $("examples");
+  box.innerHTML = "";
+  let group = "";
+  for (const ex of examplesFor(game)) {
+    if (ex.group !== group) {
+      group = ex.group;
+      const h = document.createElement("div");
+      h.className = "grp";
+      h.textContent = group;
+      box.append(h);
+    }
+    const phrase = ex.text.replaceAll("**", "");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.innerHTML = ex.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+    btn.addEventListener("click", () => void handleText(phrase, performance.now()));
+    box.append(btn);
+  }
 }
 
 function log(msg: string) {

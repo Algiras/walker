@@ -36,3 +36,7 @@ table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-nu
 td { padding: 2px 0; } td:last-child { text-align: right; }
 form { display: flex; gap: 8px; } input[type=text], #text { flex: 1; font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
 .log #log { max-height: 160px; overflow: auto; font-size: 13px; color: var(--muted); }
+
+#examples .grp { margin: 8px 0 2px; font-size: 12px; color: var(--muted); }
+#examples button { display: block; width: 100%; text-align: left; margin: 2px 0; }
+#examples b { color: var(--accent); }

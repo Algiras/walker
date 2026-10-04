@@ -33,6 +33,36 @@ describe("map generation", () => {
   });
 });
 
+describe("candidates", () => {
+  it("offers one legal action per pad and prefers building on open pads", () => {
+    const g = new Game(generateMap(7));
+    const c = g.candidates();
+    expect(c).toHaveLength(g.map.pads.length);
+    expect(c.every((x) => x.command.kind === "build")).toBe(true);
+    expect(g.bestCandidate()?.command.kind).toBe("build");
+  });
+
+  it("switches to upgrade for an occupied pad", () => {
+    const g = new Game(generateMap(7));
+    const pad = g.map.pads[0].name;
+    g.command({ kind: "build", pad });
+    for (let i = 0; i < 30 * 40 && !g.towerAt(pad); i++) g.step(1 / 30);
+    expect(g.candidates().find((x) => "pad" in x.command && x.command.pad === pad)?.command.kind).toBe("upgrade");
+  });
+
+  it("steers the automatic pick by hint", () => {
+    const g = new Game(generateMap(7));
+    const near = (h: "base" | "spawn") => g.bestCandidate({ near: h })!.stats.progress;
+    expect(near("base")).toBeGreaterThan(near("spawn"));
+    const left = g.bestCandidate({ area: "left" });
+    if (left) expect(left.stats.where).toContain("left");
+  });
+
+  it("summarises the game for the prompt", () => {
+    expect(new Game(generateMap(7)).summary()).toMatch(/Gold 100.*Base health 20/);
+  });
+});
+
 describe("simulation", () => {
   it("builds a tower when the hero reaches a pad", () => {
     const g = new Game(generateMap(7));
@@ -51,10 +81,13 @@ describe("simulation", () => {
 });
 
 describe("keyword rules", () => {
-  const pads = PAD_NAMES.slice(0, 6);
+  const pads = { padNames: PAD_NAMES.slice(0, 6), hasTower: (n: string) => n === "Charlie", best: (h: { near?: string }) => ({ kind: "build", pad: h.near === "base" ? "Foxtrot" : "Echo" }) as const };
   it.each([
     ["build a tower at bravo", { kind: "build", pad: "Bravo" }],
     ["upgrade charlie", { kind: "upgrade", pad: "Charlie" }],
+    ["build at charlie", { kind: "upgrade", pad: "Charlie" }],
+    ["we need more defense", { kind: "build", pad: "Echo" }],
+    ["defend the base", { kind: "build", pad: "Foxtrot" }],
     ["go to the base", { kind: "move", to: { type: "base" } }],
     ["attack the biggest one", { kind: "attack", mode: "strongest" }],
     ["stop", { kind: "hold" }],
