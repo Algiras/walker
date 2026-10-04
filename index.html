@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#19232e" media="(prefers-color-scheme: dark)" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233899ec'/%3E%3Ccircle cx='16' cy='16' r='6.5' fill='%23fff'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='%232f7de1'/%3E%3C/svg%3E" />
+  <title>Walker</title>
+  <meta name="description" content="Command a hero in a tower-defense map with your voice. Speech recognition and decisions run entirely in your browser." />
+  <script type="module" crossorigin src="./assets/index-Dr1cYC6U.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-Dsdqtadp.css">
+</head>
+<body>
+  <header>
+    <h1>Walker</h1>
+    <span class="sub">Talk to your hero. Speech and decisions run in your browser.</span>
+    <span class="spacer"></span>
+    <a class="link" href="https://github.com/Algiras/walker#models-and-where-they-come-from" target="_blank" rel="noopener">About the models</a>
+    <a class="link" href="https://github.com/Algiras/walker" target="_blank" rel="noopener">GitHub</a>
+    <button id="newmap">New map</button>
+  </header>
+  <main>
+    <section class="stage">
+      <div class="hud" role="group" aria-label="Game status">
+        <span>Wave <b id="wave">0</b></span>
+        <span>Gold <b id="gold">0</b></span>
+        <span>Base <b id="hp">0</b></span>
+        <span class="order">Hero <b id="order">idle</b></span>
+        <span id="flags" class="flags"></span>
+        <span class="seed">seed <b id="seed"></b></span>
+      </div>
+      <div class="board">
+        <canvas id="game" tabindex="0" role="application" aria-label="Game map. Press a pad number to open its menu." aria-describedby="tip"></canvas>
+        <div id="menu" class="menu" role="menu" aria-labelledby="menu-title" hidden></div>
+        <div id="banner" role="status" hidden></div>
+      </div>
+      <p class="tip" id="tip">Click a pad to build, upgrade or sell. Click an enemy to attack it. Click the ground to send the hero there.</p>
+    </section>
+    <aside>
+      <div class="card" id="voice">
+        <div class="row between">
+          <h2>Voice</h2>
+          <label class="check"><input type="checkbox" id="vad" disabled /> auto-detect</label>
+        </div>
+        <p class="note" id="status">Voice is off. Hold <kbd>Space</kbd> to talk once it is set up.</p>
+        <div class="meter" aria-hidden="true" hidden><i id="level"></i></div>
+        <div class="ctl two">
+          <button id="heroVoice" aria-pressed="true" title="The hero answers aloud, like a unit acknowledging an order"><span id="heroVoiceIcon" aria-hidden="true">🔊</span> Hero voice</button>
+          <button id="setupOpen">Set up voice…</button>
+        </div>
+      </div>
+      <div class="card" id="controls">
+        <h2>Hero</h2>
+        <div class="ctl" role="group" aria-label="Orders">
+          <button data-cmd='{"kind":"hold"}' title="Stop and cancel the current order"><span aria-hidden="true">■</span> Stop</button>
+          <button data-cmd='{"kind":"move","to":{"type":"base"}}' title="Retreat to the base"><span aria-hidden="true">⌂</span> Base</button>
+          <button data-cmd='{"kind":"patrol"}' title="Walk the path from spawn to base and back"><span aria-hidden="true">↔</span> Patrol</button>
+          <button data-cmd='{"kind":"undo"}' title="Undo the last action (Ctrl/Cmd+Z)"><span aria-hidden="true">↶</span> Undo</button>
+          <button data-cmd='{"kind":"repeat"}' title="Do the last command again"><span aria-hidden="true">↻</span> Again</button>
+        </div>
+        <div class="ctl attack" role="group" aria-label="Attack">
+          <span aria-hidden="true">Attack</span>
+          <button data-cmd='{"kind":"attack","mode":"nearest"}' title="Nearest enemy to the hero">Near</button>
+          <button data-cmd='{"kind":"attack","mode":"strongest"}' title="Strongest enemy">Strong</button>
+          <button data-cmd='{"kind":"attack","mode":"weakest"}' title="Weakest enemy">Weak</button>
+          <button data-cmd='{"kind":"attack","mode":"first"}' title="The enemy furthest along the path">First</button>
+          <button data-cmd='{"kind":"attack","mode":"last"}' title="The enemy at the back of the line">Last</button>
+        </div>
+        <div class="ctl game" role="group" aria-label="Move and game speed">
+          <button data-cmd='{"kind":"nudge","dir":"left"}' title="Walk left" aria-label="Walk left">←</button>
+          <button data-cmd='{"kind":"nudge","dir":"up"}' title="Walk up" aria-label="Walk up">↑</button>
+          <button data-cmd='{"kind":"nudge","dir":"down"}' title="Walk down" aria-label="Walk down">↓</button>
+          <button data-cmd='{"kind":"nudge","dir":"right"}' title="Walk right" aria-label="Walk right">→</button>
+          <button id="pause" title="Pause or resume (P)" aria-keyshortcuts="P"><span id="pause-icon" aria-hidden="true">⏸</span> <span id="pause-text">Pause</span></button>
+          <button id="speed" aria-pressed="false" aria-label="Double speed ×2" title="Switch between normal and double speed">×2</button>
+          <button data-cmd='{"kind":"nextwave"}' title="Call the next wave early for bonus gold"><span aria-hidden="true">⏭</span> Wave</button>
+        </div>
+      </div>
+      <div class="card" id="command">
+        <div class="row between"><h2>Command</h2><span class="engine" id="decider"></span></div>
+        <form id="typed"><input id="text" autocomplete="off" aria-label="Type a command" placeholder="or type: go to Alpha" /><button>Send</button></form>
+        <p id="empty">Hold <kbd>Space</kbd> and speak, or type a command.</p>
+        <div id="thinking" class="thinking" aria-hidden="true" hidden>
+          <div class="skeleton sk-line w60"></div>
+          <div class="skeleton sk-line w90"></div>
+          <div class="skeleton sk-line w40"></div>
+        </div>
+        <div id="result" hidden>
+          <div id="heard" class="heard"></div>
+          <div id="decision" class="decision"></div>
+          <div id="queued" class="queued"></div>
+          <div id="advice" class="advice"></div>
+          <table id="timing"><tbody></tbody></table>
+        </div>
+      </div>
+      <details class="card" id="try">
+        <summary>Try saying</summary>
+        <p class="hint">Keywords in <b>bold</b> carry the decision. Click a phrase to send it as text.</p>
+        <div id="examples"></div>
+      </details>
+      <details class="card">
+        <summary>Log</summary>
+        <div id="log"></div>
+      </details>
+    </aside>
+  </main>
+  <div id="setup" class="scrim" role="dialog" aria-modal="true" aria-labelledby="setup-title" aria-describedby="setup-text">
+    <div class="dialog">
+      <h2 id="setup-title" class="dialog-title">Set up voice control</h2>
+      <p id="setup-text" class="dialog-text">Walker listens and decides entirely in your browser. Get the two models ready now, so the game does not run while they download.</p>
+      <ol class="steps" id="steps" aria-label="Voice models">
+        <li id="step-stt">
+          <div class="step-top"><span>Speech to text</span><span class="step-state">Checking…</span></div>
+          <div class="sk-track" role="progressbar" aria-label="Speech to text download" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+          <div class="step-sub">Whisper small.en · about 520 MB</div>
+        </li>
+        <li id="step-llm">
+          <div class="step-top"><span>Decisions</span><span class="step-state">Checking…</span></div>
+          <div class="sk-track" role="progressbar" aria-label="Decision model download" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+          <div class="step-sub">Tev1 0.8B · about 770 MB</div>
+        </li>
+      </ol>
+      <label class="check dialog-check"><input type="checkbox" id="want-voice" checked /> The hero answers aloud in a deep voice (recorded, about 3 MB)</label>
+      <p class="note" id="setup-note" role="status"></p>
+      <details class="about">
+        <summary>About these models</summary>
+        <ul>
+          <li><b>Speech to text:</b> Whisper small.en by OpenAI (MIT), ONNX conversion by onnx-community. Downloaded from <a href="https://huggingface.co/onnx-community/whisper-small.en" target="_blank" rel="noopener">huggingface.co/onnx-community/whisper-small.en</a>.</li>
+          <li><b>Decisions:</b> Tev1 0.8B by Together AI, fine-tuned from Qwen3.5-0.8B (Apache-2.0); the fine-tune's own license is still being finalized upstream. ONNX export by goldenfox. Downloaded from <a href="https://huggingface.co/goldenfox/tev1-0.8b-decision-onnx" target="_blank" rel="noopener">huggingface.co/goldenfox/tev1-0.8b-decision-onnx</a>.</li>
+          <li><b>Hero voice:</b> synthetic speech recorded in advance with Kokoro-82M (Apache-2.0). It ships with this site; no voice model runs in your browser.</li>
+          <li><b>Where it goes:</b> your browser downloads the models straight from huggingface.co, and the ONNX runtime (WebAssembly) from cdn.jsdelivr.net, so those services see the request like any download. Models are cached in your browser. Your voice, your commands and the game never leave your device.</li>
+          <li><b>As is:</b> these are third-party, partly experimental models. They can mishear you or misjudge a command, and their authors are not affiliated with this project.</li>
+        </ul>
+      </details>
+      <div class="dialog-actions">
+        <button id="start">Start without voice</button>
+        <button id="load" class="primary">Download and load models</button>
+      </div>
+    </div>
+  </div>
+  <div id="sr-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>
