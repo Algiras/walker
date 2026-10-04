@@ -176,6 +176,13 @@ async function interpret(text: string, t0: number, asrMs?: number): Promise<bool
       acted = run(d.command).ok;
       if (acted) issuedAt = performance.now();
       $("decision").textContent = acted ? `${describeCommand(d.command)}  ·  ${d.trace}` : $("decision").textContent;
+    } else if (d.status === "confirm" && d.command && game.refusal(d.command)) {
+      // No point asking "did you mean…?" about something the game would refuse anyway.
+      const no = game.refusal(d.command)!;
+      game.hero.shake = 0.6;
+      $("decision").textContent = no;
+      log(no);
+      sayLine(refusalCallout(no));
     } else if (d.status === "confirm" && d.command) {
       pending = { command: d.command, until: Date.now() + 10_000 };
       game.hero.shake = 0.35;
