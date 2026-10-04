@@ -3,7 +3,7 @@ import { Game, Hint } from "../game/sim";
 import { Decider } from "./decide";
 import { Decision, settle } from "./settle";
 import { mentions } from "./fuzzy";
-import { cleanTranscript, goalOf, intents, slotNumber, VERBS } from "./verbs";
+import { cleanTranscript, enemyNumber, goalOf, intents, ordinalOf, slotNumber, VERBS } from "./verbs";
 
 const has = (s: string, re: RegExp) => re.test(s);
 
@@ -52,8 +52,13 @@ export function ruleParse(text: string, w: RuleWorld): Command | null {
     return w.best(hintFrom(s));
   }
   if (intents(text).includes("attack")) {
+    const en = enemyNumber(text);
+    if (en !== null) return { kind: "attack", mode: "number", n: en };
+    const rank = ordinalOf(text);
+    if (rank !== null) return { kind: "attack", mode: "rank", n: rank };
     const mode: FocusMode = has(s, /\b(strong|strongest|big|biggest|tank|tough)\b/) ? "strongest"
       : has(s, /\b(weak|weakest|small|smallest|low)\b/) ? "weakest"
+      : has(s, /\b(last|back|rear|slowest|trailing)\b/) ? "last"
       : has(s, /\b(first|leading|front|furthest)\b/) ? "first" : "nearest";
     return { kind: "attack", mode };
   }

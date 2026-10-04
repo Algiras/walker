@@ -1,4 +1,5 @@
-import { describeCommand } from "../game/commands";
+import { describeCommand, ordinal } from "../game/commands";
+import { enemyNumber, ordinalOf } from "./verbs";
 import { Game } from "../game/sim";
 import { Command } from "../game/commands";
 
@@ -28,6 +29,7 @@ export function actionOptions(g: Game): Option[] {
     out.push({ key: "attack_strongest", text: "attack the strongest enemy (most health, biggest)", value: { kind: "attack", mode: "strongest" } });
     out.push({ key: "attack_weakest", text: "attack the weakest enemy (least health)", value: { kind: "attack", mode: "weakest" } });
     out.push({ key: "attack_first", text: "attack the first enemy (furthest along, nearest the base)", value: { kind: "attack", mode: "first" } });
+    out.push({ key: "attack_last", text: "attack the last enemy (the one at the back, furthest from the base)", value: { kind: "attack", mode: "last" } });
   }
 
   for (const p of g.map.pads) {
@@ -50,5 +52,15 @@ export function actionOptions(g: Game): Option[] {
   out.push({ key: "speed_down", text: "slow the game back to normal speed", value: { kind: "speed", fast: false } });
   out.push({ key: "nextwave", text: "call the next wave early for bonus gold", value: { kind: "nextwave" } });
   out.push({ key: "none", text: NONE, value: null });
+  return out;
+}
+
+/** Options that only exist because of what was said: an enemy named by its number or its place in the line. */
+export function extraOptions(text: string): Option[] {
+  const out: Option[] = [];
+  const n = enemyNumber(text);
+  if (n !== null) out.push({ key: `attack_enemy_${n}`, text: `attack enemy ${n}, the enemy labelled ${n} on the map`, value: { kind: "attack", mode: "number", n } });
+  const r = ordinalOf(text);
+  if (r !== null) out.push({ key: `attack_rank_${r}`, text: `attack the ${ordinal(r)} enemy counting from the front of the line`, value: { kind: "attack", mode: "rank", n: r } });
   return out;
 }

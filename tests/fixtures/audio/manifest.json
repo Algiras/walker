@@ -174,9 +174,9 @@
     "summary": "Wave 1. Gold 100 (build 50, upgrade 40/70). Base health 20. Towers: #2 Bravo L1. 6 enemies (6 grunt). Hero is idle. Last command: attack nearest enemy."
   },
   {
-    "file": "sell-tower-2.af_heart.wav",
+    "file": "remove-tower-2.af_heart.wav",
     "voice": "af_heart",
-    "text": "sell tower 2",
+    "text": "remove tower 2",
     "scenario": "midgame",
     "state": {
       "seed": 7,
@@ -203,9 +203,9 @@
     "summary": "Wave 1. Gold 100 (build 50, upgrade 40/70). Base health 20. Towers: #2 Bravo L1. 6 enemies (6 grunt). Hero is idle. Last command: attack nearest enemy."
   },
   {
-    "file": "sell-tower-2.am_michael.wav",
+    "file": "remove-tower-2.am_michael.wav",
     "voice": "am_michael",
-    "text": "sell tower 2",
+    "text": "remove tower 2",
     "scenario": "midgame",
     "state": {
       "seed": 7,
@@ -719,6 +719,184 @@
       "command": {
         "kind": "attack",
         "mode": "strongest"
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40/70). Base health 20. Towers: #2 Bravo L1. 6 enemies (6 grunt). Hero is idle. Last command: attack nearest enemy."
+  },
+  {
+    "file": "attack-enemy-3.af_heart.wav",
+    "voice": "af_heart",
+    "text": "attack enemy 3",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9,
+      "last": {
+        "kind": "attack",
+        "mode": "nearest"
+      }
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "attack",
+        "mode": "number",
+        "n": 3
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40/70). Base health 20. Towers: #2 Bravo L1. 6 enemies (6 grunt). Hero is idle. Last command: attack nearest enemy."
+  },
+  {
+    "file": "attack-enemy-3.am_michael.wav",
+    "voice": "am_michael",
+    "text": "attack enemy 3",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9,
+      "last": {
+        "kind": "attack",
+        "mode": "nearest"
+      }
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "attack",
+        "mode": "number",
+        "n": 3
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40/70). Base health 20. Towers: #2 Bravo L1. 6 enemies (6 grunt). Hero is idle. Last command: attack nearest enemy."
+  },
+  {
+    "file": "attack-the-last-one.af_heart.wav",
+    "voice": "af_heart",
+    "text": "attack the last one",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9,
+      "last": {
+        "kind": "attack",
+        "mode": "nearest"
+      }
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "attack",
+        "mode": "last"
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40/70). Base health 20. Towers: #2 Bravo L1. 6 enemies (6 grunt). Hero is idle. Last command: attack nearest enemy."
+  },
+  {
+    "file": "attack-the-last-one.am_michael.wav",
+    "voice": "am_michael",
+    "text": "attack the last one",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9,
+      "last": {
+        "kind": "attack",
+        "mode": "nearest"
+      }
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "attack",
+        "mode": "last"
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40/70). Base health 20. Towers: #2 Bravo L1. 6 enemies (6 grunt). Hero is idle. Last command: attack nearest enemy."
+  },
+  {
+    "file": "attack-the-second-one.af_heart.wav",
+    "voice": "af_heart",
+    "text": "attack the second one",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9,
+      "last": {
+        "kind": "attack",
+        "mode": "nearest"
+      }
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "attack",
+        "mode": "rank",
+        "n": 2
+      }
+    },
+    "summary": "Wave 1. Gold 100 (build 50, upgrade 40/70). Base health 20. Towers: #2 Bravo L1. 6 enemies (6 grunt). Hero is idle. Last command: attack nearest enemy."
+  },
+  {
+    "file": "attack-the-second-one.am_michael.wav",
+    "voice": "am_michael",
+    "text": "attack the second one",
+    "scenario": "midgame",
+    "state": {
+      "seed": 7,
+      "towers": [
+        {
+          "pad": 1,
+          "level": 1
+        }
+      ],
+      "gold": 100,
+      "warmup": 9,
+      "last": {
+        "kind": "attack",
+        "mode": "nearest"
+      }
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "attack",
+        "mode": "rank",
+        "n": 2
       }
     },
     "summary": "Wave 1. Gold 100 (build 50, upgrade 40/70). Base health 20. Towers: #2 Bravo L1. 6 enemies (6 grunt). Hero is idle. Last command: attack nearest enemy."
@@ -1849,6 +2027,140 @@
       "command": {
         "kind": "upgrade",
         "pad": "Alpha"
+      }
+    },
+    "summary": "Wave 1. Gold 200 (build 50, upgrade 40/70). Base health 20. Towers: #1 Alpha L1, #3 Charlie L2, #5 Echo L1. 5 enemies (5 grunt). Hero is idle."
+  },
+  {
+    "file": "delete-tower-3.af_heart.wav",
+    "voice": "af_heart",
+    "text": "delete tower 3",
+    "scenario": "fortified",
+    "state": {
+      "seed": 21,
+      "towers": [
+        {
+          "pad": 0,
+          "level": 1
+        },
+        {
+          "pad": 2,
+          "level": 2
+        },
+        {
+          "pad": 4,
+          "level": 1
+        }
+      ],
+      "gold": 200,
+      "warmup": 8
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "sell",
+        "pad": "Charlie"
+      }
+    },
+    "summary": "Wave 1. Gold 200 (build 50, upgrade 40/70). Base health 20. Towers: #1 Alpha L1, #3 Charlie L2, #5 Echo L1. 5 enemies (5 grunt). Hero is idle."
+  },
+  {
+    "file": "delete-tower-3.am_michael.wav",
+    "voice": "am_michael",
+    "text": "delete tower 3",
+    "scenario": "fortified",
+    "state": {
+      "seed": 21,
+      "towers": [
+        {
+          "pad": 0,
+          "level": 1
+        },
+        {
+          "pad": 2,
+          "level": 2
+        },
+        {
+          "pad": 4,
+          "level": 1
+        }
+      ],
+      "gold": 200,
+      "warmup": 8
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "sell",
+        "pad": "Charlie"
+      }
+    },
+    "summary": "Wave 1. Gold 200 (build 50, upgrade 40/70). Base health 20. Towers: #1 Alpha L1, #3 Charlie L2, #5 Echo L1. 5 enemies (5 grunt). Hero is idle."
+  },
+  {
+    "file": "attack-enemy-2.af_heart.wav",
+    "voice": "af_heart",
+    "text": "attack enemy 2",
+    "scenario": "fortified",
+    "state": {
+      "seed": 21,
+      "towers": [
+        {
+          "pad": 0,
+          "level": 1
+        },
+        {
+          "pad": 2,
+          "level": 2
+        },
+        {
+          "pad": 4,
+          "level": 1
+        }
+      ],
+      "gold": 200,
+      "warmup": 8
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "attack",
+        "mode": "number",
+        "n": 2
+      }
+    },
+    "summary": "Wave 1. Gold 200 (build 50, upgrade 40/70). Base health 20. Towers: #1 Alpha L1, #3 Charlie L2, #5 Echo L1. 5 enemies (5 grunt). Hero is idle."
+  },
+  {
+    "file": "attack-enemy-2.am_michael.wav",
+    "voice": "am_michael",
+    "text": "attack enemy 2",
+    "scenario": "fortified",
+    "state": {
+      "seed": 21,
+      "towers": [
+        {
+          "pad": 0,
+          "level": 1
+        },
+        {
+          "pad": 2,
+          "level": 2
+        },
+        {
+          "pad": 4,
+          "level": 1
+        }
+      ],
+      "gold": 200,
+      "warmup": 8
+    },
+    "expect": {
+      "kind": "exact",
+      "command": {
+        "kind": "attack",
+        "mode": "number",
+        "n": 2
       }
     },
     "summary": "Wave 1. Gold 200 (build 50, upgrade 40/70). Base health 20. Towers: #1 Alpha L1, #3 Charlie L2, #5 Echo L1. 5 enemies (5 grunt). Hero is idle."

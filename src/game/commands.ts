@@ -4,14 +4,15 @@ export type Place =
   | { type: "spawn" }
   /** Only the on-screen controls can point at an arbitrary spot. */
   | { type: "point"; x: number; y: number };
-export type FocusMode = "nearest" | "strongest" | "weakest" | "first";
+/** number: the enemy labelled n on the map. rank: the nth enemy from the front of the line. */
+export type FocusMode = "nearest" | "strongest" | "weakest" | "first" | "last" | "number" | "rank";
 export type Dir = "left" | "right" | "up" | "down";
 
 export type Command =
   | { kind: "move"; to: Place }
   | { kind: "nudge"; dir: Dir }
   | { kind: "patrol" }
-  | { kind: "attack"; mode: FocusMode }
+  | { kind: "attack"; mode: FocusMode; n?: number }
   | { kind: "build"; pad: string }
   | { kind: "upgrade"; pad: string }
   | { kind: "sell"; pad: string }
@@ -33,10 +34,13 @@ export function describeCommand(c: Command): string {
     case "move": return `move to ${placeLabel(c.to)}`;
     case "nudge": return `move ${c.dir}`;
     case "patrol": return "patrol the path";
-    case "attack": return `attack ${c.mode} enemy`;
+    case "attack":
+      if (c.mode === "number") return `attack enemy ${c.n}`;
+      if (c.mode === "rank") return `attack the ${ordinal(c.n!)} enemy`;
+      return `attack ${c.mode} enemy`;
     case "build": return `build tower at ${c.pad}`;
     case "upgrade": return `upgrade tower at ${c.pad}`;
-    case "sell": return `sell tower at ${c.pad}`;
+    case "sell": return `sell (remove) tower at ${c.pad}`;
     case "hold": return "hold position";
     case "pause": return "pause the game";
     case "resume": return "resume the game";
@@ -46,3 +50,6 @@ export function describeCommand(c: Command): string {
     case "repeat": return "repeat the last command";
   }
 }
+
+const ORDINALS = ["zeroth", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
+export const ordinal = (n: number) => ORDINALS[n] ?? `${n}th`;

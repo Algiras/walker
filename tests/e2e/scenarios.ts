@@ -59,6 +59,8 @@ export const CASES: Case[] = [
   { scenario: "fortified", text: "sell tower 3", expect: exact({ kind: "sell", pad: padOf("fortified", 2) }) },
   { scenario: "fortified", text: "destroy tower five", expect: exact({ kind: "sell", pad: padOf("fortified", 4) }) },
   { scenario: "fortified", text: "upgrade tower 1", expect: exact({ kind: "upgrade", pad: padOf("fortified", 0) }) },
+  { scenario: "fortified", text: "delete tower 3", expect: exact({ kind: "sell", pad: padOf("fortified", 2) }) },
+  { scenario: "fortified", text: "attack enemy 2", expect: exact({ kind: "attack", mode: "number", n: 2 }) },
   { scenario: "fortified", text: "destroy the strongest enemy", expect: exact({ kind: "attack", mode: "strongest" }) },
 ];
 

@@ -20,7 +20,7 @@ export function examplesFor(g: Game): Example[] {
     ...(g.towers.length
       ? [
           { group: "Name a pad", text: `**upgrade** **tower ${g.towers[0].id}**`, expect: { kind: "exact", command: { kind: "upgrade", pad: g.towers[0].pad } } as Expect },
-          { group: "Sell", text: `**sell** **tower ${g.towers[0].id}**`, expect: { kind: "exact", command: { kind: "sell", pad: g.towers[0].pad } } as Expect },
+          { group: "Sell", text: `**remove** **tower ${g.towers[0].id}**`, expect: { kind: "exact", command: { kind: "sell", pad: g.towers[0].pad } } as Expect },
         ]
       : []),
     { group: "Say a goal", text: `**defend** the **base**`, expect: { kind: "defend", pick: "base" } },
@@ -32,6 +32,9 @@ export function examplesFor(g: Game): Example[] {
     { group: "Hero", text: `**go to** **${c}**`, expect: { kind: "exact", command: { kind: "move", to: { type: "pad", name: c } } } },
     { group: "Hero", text: `**retreat** to the **base**`, expect: { kind: "exact", command: { kind: "move", to: { type: "base" } } } },
     { group: "Hero", text: `**attack** the **strongest** one`, expect: { kind: "exact", command: { kind: "attack", mode: "strongest" } } },
+    { group: "Hero", text: `**attack** **enemy 3**`, expect: { kind: "exact", command: { kind: "attack", mode: "number", n: 3 } } },
+    { group: "Hero", text: `**attack** the **last** one`, expect: { kind: "exact", command: { kind: "attack", mode: "last" } } },
+    { group: "Hero", text: `**attack** the **second** one`, expect: { kind: "exact", command: { kind: "attack", mode: "rank", n: 2 } } },
     { group: "Hero", text: `**attack** the **nearest** enemy`, expect: { kind: "exact", command: { kind: "attack", mode: "nearest" } } },
     { group: "Hero", text: `**stop**, hold position`, expect: { kind: "exact", command: { kind: "hold" } } },
     { group: "Hero", text: `**go left**`, expect: { kind: "exact", command: { kind: "nudge", dir: "left" } } },

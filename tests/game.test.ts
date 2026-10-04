@@ -3,8 +3,8 @@ import { generateMap, cellKey } from "../src/game/map";
 import { Game } from "../src/game/sim";
 import { ruleParse } from "../src/voice/rules";
 import { PAD_NAMES } from "../src/game/map";
-import { actionOptions } from "../src/voice/context";
-import { cleanTranscript, gateOptions, hasEvidence, intents, intentOf, slotNumber, spokenNumbers } from "../src/voice/verbs";
+import { actionOptions, extraOptions } from "../src/voice/context";
+import { cleanTranscript, enemyNumber, splitCommands, gateOptions, hasEvidence, intents, intentOf, ordinalOf, slotNumber, spokenNumbers } from "../src/voice/verbs";
 import { settle } from "../src/voice/settle";
 import { PickDecider } from "../src/voice/decide";
 import { COSTS } from "../src/game/sim";
@@ -167,7 +167,7 @@ describe("option gate details", () => {
   const g = new Game(generateMap(seven));
   g.hero.pos = { x: 9, y: 5.5 };
   for (const p of g.map.pads) g.addTower(p.name);
-  g.enemies.push({ id: 1, kind: "grunt", d: 5, hp: 10, maxHp: 10, speed: 1, reward: 1 });
+  g.enemies.push({ id: 1, num: 1, kind: "grunt", d: 5, hp: 10, maxHp: 10, speed: 1, reward: 1 });
   const all = actionOptions(g);
   const pads = (text: string) => new Set(gateOptions(all, text).flatMap((o) => (o.value && o.value !== "auto" && "pad" in o.value ? [o.value.pad] : [])));
 
@@ -403,6 +403,27 @@ describe("undo and new commands", () => {
   });
 });
 
+describe("several commands in one sentence", () => {
+  it("splits at and, then, commas and sentence ends", () => {
+    expect(splitCommands("go to Charlie and build a tower at Alpha")).toEqual(["go to Charlie", "build a tower at Alpha"]);
+    expect(splitCommands("sell tower 3, then upgrade tower 1")).toEqual(["sell tower 3", "upgrade tower 1"]);
+    expect(splitCommands("pause the game. go left")).toEqual(["pause the game", "go left"]);
+    expect(splitCommands("go left and then patrol and then attack the last one")).toHaveLength(3);
+  });
+
+  it("keeps lists and single commands whole", () => {
+    expect(splitCommands("build a tower at Alpha and Bravo")).toEqual(["build a tower at Alpha and Bravo"]);
+    expect(splitCommands("attack the weakest and strongest")).toEqual(["attack the weakest and strongest"]);
+    expect(splitCommands("go to Charlie")).toEqual(["go to Charlie"]);
+    expect(splitCommands("")).toEqual([""]);
+  });
+
+  it("never returns more than four clauses", () => {
+    const many = splitCommands("go left, go right, go up, go down, go left, patrol");
+    expect(many).toHaveLength(4);
+  });
+});
+
 describe("evidence", () => {
   it("sees something to act on, or nothing", () => {
     for (const t of ["go to Charlie", "sell tower 3", "defend the base", "pause", "undo", "we need more towers", "Charlie"]) expect(hasEvidence(t)).toBe(true);
@@ -461,5 +482,80 @@ describe("new voice intents", () => {
     expect(ruleParse("patrol the path", w)).toEqual({ kind: "patrol" });
     expect(ruleParse("call the next wave", w)).toEqual({ kind: "nextwave" });
     expect(ruleParse("do that again", w)).toEqual({ kind: "repeat" });
+  });
+});
+
+describe("targeting enemies by number and place in line", () => {
+  const field = () => {
+    const g = new Game(generateMap(7));
+    for (let i = 0; i < 30 * 12; i++) g.step(1 / 30);
+    return g;
+  };
+
+  it("labels enemies 1, 2, 3 in spawn order within a wave", () => {
+    const g = field();
+    expect(g.enemies.map((e) => e.num)).toEqual(g.enemies.map((_, i) => i + 1));
+  });
+
+  it("picks by number, by rank from the front, and by first and last", () => {
+    const g = field();
+    const byDistance = [...g.enemies].sort((a, b) => b.d - a.d);
+    expect(g.pick("first")).toBe(byDistance[0]);
+    expect(g.pick("last")).toBe(byDistance[byDistance.length - 1]);
+    expect(g.pick("rank", 2)).toBe(byDistance[1]);
+    expect(g.pick("number", 3)?.num).toBe(3);
+    expect(g.pick("number", 99)).toBeUndefined();
+  });
+
+  it("refuses an enemy that is not there and locks onto a numbered one until it dies", () => {
+    const g = field();
+    expect(g.command({ kind: "attack", mode: "number", n: 99 }).message).toMatch(/no enemy 99/);
+    expect(g.command({ kind: "attack", mode: "rank", n: 99 }).message).toMatch(/only \d+ enemies/);
+    const target = g.pick("number", 2)!;
+    g.command({ kind: "attack", mode: "number", n: 2 });
+    for (let i = 0; i < 30 * 60 && g.enemies.includes(target); i++) g.step(1 / 30);
+    g.step(1 / 30);
+    expect(g.hero.order.type === "idle" || !g.enemies.includes(target)).toBe(true);
+  });
+});
+
+describe("enemy words", () => {
+  it("hears enemy numbers and keeps tower numbers apart", () => {
+    expect(enemyNumber("attack enemy three")).toBe(3);
+    expect(enemyNumber("attack number 3")).toBe(3);
+    expect(enemyNumber("kill monster 4")).toBe(4);
+    expect(slotNumber("attack number 3")).toBeNull();
+    expect(slotNumber("sell number 3")).toBe(3);
+    expect(enemyNumber("sell number 3")).toBeNull();
+  });
+
+  it("reads ordinals only when they name an enemy", () => {
+    expect(ordinalOf("attack the second one")).toBe(2);
+    expect(ordinalOf("kill the 3rd enemy")).toBe(3);
+    expect(ordinalOf("hold on a second")).toBeNull();
+  });
+
+  it("reads delete and remove as selling a tower, and destroy by what it is aimed at", () => {
+    for (const t of ["delete tower 3", "remove Charlie", "take down tower 2", "bulldoze Delta", "destroy Charlie", "destroy tower 3"]) expect(intents(t)).toEqual(["sell"]);
+    expect(intents("destroy enemy 3")).toEqual(["attack"]);
+  });
+
+  it("narrows to the named enemy, the last one, or the first one", () => {
+    const g = new Game(generateMap(7));
+    g.enemies.push({ id: 1, num: 1, kind: "grunt", d: 5, hp: 10, maxHp: 10, speed: 1, reward: 1 });
+    const keys = (t: string) => gateOptions([...extraOptions(t), ...actionOptions(g)], t).map((o) => o.key);
+    expect(keys("attack enemy 3")).toEqual(["attack_enemy_3"]);
+    expect(keys("attack the second one")).toEqual(["attack_rank_2"]);
+    expect(keys("attack the last one")).toEqual(["attack_last"]);
+    expect(keys("attack the first one")).toEqual(["attack_first"]);
+  });
+
+  it("the keyword fallback parses them", () => {
+    const w = { padNames: PAD_NAMES.slice(0, 6), padOfSlot: (n: number) => PAD_NAMES[n - 1], hasTower: (n: string) => n === "Charlie", best: () => null };
+    expect(ruleParse("attack enemy 3", w)).toEqual({ kind: "attack", mode: "number", n: 3 });
+    expect(ruleParse("attack the last one", w)).toEqual({ kind: "attack", mode: "last" });
+    expect(ruleParse("attack the second one", w)).toEqual({ kind: "attack", mode: "rank", n: 2 });
+    expect(ruleParse("delete tower 3", w)).toEqual({ kind: "sell", pad: "Charlie" });
+    expect(ruleParse("remove Charlie", w)).toEqual({ kind: "sell", pad: "Charlie" });
   });
 });

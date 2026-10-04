@@ -30,6 +30,7 @@
         <div id="menu" class="menu" hidden></div>
         <div id="banner" hidden></div>
       </div>
+      <p class="tip" id="tip">Click a pad to build, upgrade or sell. Click an enemy to attack it. Click the ground to send the hero there.</p>
     </section>
     <aside>
       <div class="card" id="voice">
@@ -38,9 +39,20 @@
           <label class="check"><input type="checkbox" id="vad" /> auto-detect</label>
         </div>
         <button id="load" class="primary wide">Load voice models</button>
-        <div class="bars" id="bars"></div>
-        <div class="meter"><i id="level"></i></div>
-        <p class="note" id="status">Not loaded. The first load downloads about 1.3 GB, then it is cached. Hold <kbd>Space</kbd> to talk.</p>
+        <ol class="steps" id="steps" hidden aria-label="Loading voice models">
+          <li id="step-stt">
+            <div class="step-top"><span>Speech to text</span><span class="step-state">Waiting</span></div>
+            <div class="sk-track skeleton" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+            <div class="step-sub">Whisper small.en · about 520 MB</div>
+          </li>
+          <li id="step-llm">
+            <div class="step-top"><span>Decisions</span><span class="step-state">Waiting</span></div>
+            <div class="sk-track skeleton" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+            <div class="step-sub">Tev1 0.8B · about 770 MB</div>
+          </li>
+        </ol>
+        <div class="meter" hidden><i id="level"></i></div>
+        <p class="note" id="status">Downloads about 1.3 GB once, then it is cached.</p>
       </div>
       <div class="card" id="controls">
         <h2>Hero</h2>
@@ -57,6 +69,7 @@
           <button data-cmd='{"kind":"attack","mode":"strongest"}' title="Strongest enemy">Strong</button>
           <button data-cmd='{"kind":"attack","mode":"weakest"}' title="Weakest enemy">Weak</button>
           <button data-cmd='{"kind":"attack","mode":"first"}' title="The enemy furthest along the path">First</button>
+          <button data-cmd='{"kind":"attack","mode":"last"}' title="The enemy at the back of the line">Last</button>
         </div>
         <div class="ctl game">
           <button data-cmd='{"kind":"nudge","dir":"left"}' title="Walk left">←</button>
@@ -67,16 +80,23 @@
           <button id="speed" title="Switch between normal and double speed">×2</button>
           <button data-cmd='{"kind":"nextwave"}' title="Call the next wave early for bonus gold">⏭ Wave</button>
         </div>
-        <p class="note">Click a pad on the map to build, upgrade or sell. Click the ground to send the hero there.</p>
       </div>
-      <div class="card">
-        <h2>Command</h2>
+      <div class="card" id="command" aria-live="polite">
+        <div class="row between"><h2>Command</h2><span class="engine" id="decider"></span></div>
         <form id="typed"><input id="text" autocomplete="off" placeholder="or type: go to Alpha" /><button>Send</button></form>
-        <div id="heard" class="heard"></div>
-        <div id="decision" class="decision"></div>
-        <div id="advice" class="advice"></div>
-        <table id="timing"><tbody></tbody></table>
-        <p class="note" id="decider"></p>
+        <p id="empty">Hold <kbd>Space</kbd> and speak, or type a command.</p>
+        <div id="thinking" class="thinking" hidden aria-label="Working out the command">
+          <div class="skeleton sk-line w60"></div>
+          <div class="skeleton sk-line w90"></div>
+          <div class="skeleton sk-line w40"></div>
+        </div>
+        <div id="result" hidden>
+          <div id="heard" class="heard"></div>
+          <div id="decision" class="decision"></div>
+          <div id="queued" class="queued"></div>
+          <div id="advice" class="advice"></div>
+          <table id="timing"><tbody></tbody></table>
+        </div>
       </div>
       <details class="card" id="try">
         <summary>Try saying</summary>

@@ -68,6 +68,13 @@ export function render(ctx: CanvasRenderingContext2D, g: Game) {
     ctx.fillRect(x - 12, y - 18, 24, 4);
     ctx.fillStyle = "#2ecc71";
     ctx.fillRect(x - 12, y - 18, 24 * Math.max(0, e.hp / e.maxHp), 4);
+    ctx.font = "bold 11px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(0,0,0,.75)";
+    ctx.strokeText(String(e.num), x, y - 21);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(String(e.num), x, y - 21);
   }
   for (const b of g.beams) {
     ctx.strokeStyle = b.hero ? "#4aa3ff" : "#ffd166";

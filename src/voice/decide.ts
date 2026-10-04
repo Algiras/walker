@@ -1,6 +1,6 @@
 import { Command, describeCommand } from "../game/commands";
 import { Game } from "../game/sim";
-import { actionOptions } from "./context";
+import { actionOptions, extraOptions } from "./context";
 import { hintFrom, ruleParse, worldOf } from "./rules";
 import { ACT_CONFIDENCE, AGREEMENT_CONFIDENCE, Decision, settle } from "./settle";
 import { cleanTranscript, gateOptions, hasEvidence, intents, normalize } from "./verbs";
@@ -41,7 +41,7 @@ export class PickDecider implements Decider {
     if (!evidence && text.split(/\s+/).filter(Boolean).length <= 2) {
       return { command: null, confidence: 0, status: "reject", note: "I did not catch that. Say it again?", trace: "nothing to act on in that", ms: performance.now() - t0 };
     }
-    const opts = gateOptions(actionOptions(game), text);
+    const opts = gateOptions([...extraOptions(text), ...actionOptions(game)], text);
     if (!opts.length) return { command: null, confidence: 0, status: "reject", note: nothingTo(text), trace: "no legal action matches", ms: performance.now() - t0 };
 
     const probs = await this.pick({ utterance: text, context: game.summary(), options: opts });

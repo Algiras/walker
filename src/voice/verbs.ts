@@ -9,7 +9,7 @@ export const VERBS: Record<Intent, RegExp> = {
   defend: /\b(build|place|construct|put|create|make|add|upgrade|improve|strengthen|reinforce|defend|defense|defence|protect|cover|stronger)\b/,
   attack: /\b(attack|kill|shoot|fight|target|focus|hit)\b/,
   hold: /\b(stop(?! (them|it|him|her|those|the))|hold|stay|wait|halt|freeze)\b/,
-  sell: /\b(sell|scrap|demolish|dismantle|remove|refund|tear down|get rid of)\b/,
+  sell: /\b(sell|scrap|demolish|dismantle|remove|delete|refund|tear down|take down|knock down|pull down|bulldoze|get rid of)\b/,
   game: /\b(pause|resume|unpause|continue|faster|speed|slower|slow|normal speed|next wave|call the wave|send the wave|call wave)\b/,
   undo: /\b(undo|revert|rollback|roll back|take (that|it) back|cancel (that|it|the last)|never ?mind|go back on that|oops)\b/,
   repeat: /\b(again|repeat|redo|same again|one more time)\b/,
@@ -24,7 +24,11 @@ export const normalize = (text: string) => cleanTranscript(text).toLowerCase().r
 export function intents(text: string): Intent[] {
   const s = cleanTranscript(text).toLowerCase().replace(/[^a-z0-9\s]/g, " ");
   const found = (Object.keys(VERBS) as Intent[]).filter((k) => VERBS[k].test(s));
-  if (/\bdestroy\b/.test(s)) found.push(STRUCTURE.test(s) ? "sell" : "attack");
+  if (/\bdestroy\b/.test(s)) {
+    const words = s.split(/\s+/).filter(Boolean);
+    found.push(STRUCTURE.test(s) || slotNumber(text) !== null || PAD_NAMES.some((n) => mentions(words, n)) ? "sell" : "attack");
+  }
+  if (/\benemy \d+\b/.test(s) || ordinalOf(text) !== null) found.push("attack");
   return [...new Set(found)];
 }
 
@@ -59,6 +63,12 @@ function narrowByKeyword(options: Option[], s: string, found: Intent[]): Option[
     return hit.length ? hit : options;
   };
   if (/\bpatrol\b/.test(s)) return only((o) => kind(o)?.kind === "patrol");
+  if (found.includes("attack")) {
+    if (/\benemy \d+\b/.test(s)) return only((o) => kind(o)?.kind === "attack" && (kind(o) as { mode: string }).mode === "number");
+    if (ordinalOf(s) !== null) return only((o) => kind(o)?.kind === "attack" && (kind(o) as { mode: string }).mode === "rank");
+    if (/\blast\b/.test(s)) return only((o) => kind(o)?.kind === "attack" && (kind(o) as { mode: string }).mode === "last");
+    if (/\bfirst\b/.test(s)) return only((o) => kind(o)?.kind === "attack" && (kind(o) as { mode: string }).mode === "first");
+  }
   if (!found.includes("game")) return options;
   if (/\b(next wave|call (the )?wave|send (the )?wave)\b/.test(s)) return only((o) => kind(o)?.kind === "nextwave");
   if (/\bpause\b/.test(s)) return only((o) => kind(o)?.kind === "pause");
@@ -92,7 +102,7 @@ export function gateOptions(options: Option[], text: string): Option[] {
     if (!out.length) return [];
   }
 
-  out = narrowByKeyword(out, clean.replace(/[^a-z\s]/g, " "), found);
+  out = narrowByKeyword(out, clean.replace(/[^a-z0-9\s]/g, " "), found);
 
   const words = clean.replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
   const slot = slotNumber(text);
@@ -157,19 +167,57 @@ const WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five:
 const SOUNDS_LIKE: Record<string, number> = { won: 1, to: 2, too: 2, for: 4, fore: 4, ate: 8 };
 const NOUN = "(?:tower|pad|slot|number|no)";
 
+const COUNT = Object.keys(WORDS).join("|");
+
 /**
- * "tower two", "pad 2", "number #2" and a trailing "tower to" all become "tower 2" (a pad slot number).
- * Sound-alikes such as to/for are only trusted as the last word, so "a tower to the left" stays intact.
+ * "tower two", "pad 2" and "number #2" become "tower 2" (a pad slot number); "enemy three" and, when the
+ * sentence is about attacking, "number 3" become "enemy 3". Sound-alikes such as to/for are only trusted as the
+ * last word after a tower or pad, so "a tower to the left" stays intact.
  */
 export function spokenNumbers(text: string): string {
-  return text
-    .replace(new RegExp(`\\b${NOUN}\\.?\\s*#?\\s*(\\d+|${Object.keys(WORDS).join("|")})\\b`, "gi"), (_, n: string) => `tower ${WORDS[n.toLowerCase()] ?? n}`)
+  const aboutEnemies = /\b(attack|kill|shoot|target|fight|focus|hit)\b/i.test(text) && !/\b(tower|pad|slot)\b/i.test(text);
+  let t = text.replace(new RegExp(`\\b(?:enemy|enemies|monster|creep)\\.?\\s*#?\\s*(\\d+|${COUNT})\\b`, "gi"), (_, n: string) => `enemy ${WORDS[n.toLowerCase()] ?? n}`);
+  if (aboutEnemies) t = t.replace(new RegExp(`\\b(?:number|no)\\.?\\s*#?\\s*(\\d+|${COUNT})\\b`, "gi"), (_, n: string) => `enemy ${WORDS[n.toLowerCase()] ?? n}`);
+  return t
+    .replace(new RegExp(`\\b${NOUN}\\.?\\s*#?\\s*(\\d+|${COUNT})\\b`, "gi"), (_, n: string) => `tower ${WORDS[n.toLowerCase()] ?? n}`)
     .replace(new RegExp(`\\b${NOUN}\\.?\\s+(${Object.keys(SOUNDS_LIKE).join("|")})\\s*[.!?]?\\s*$`, "i"), (_, n: string) => `tower ${SOUNDS_LIKE[n.toLowerCase()]}`);
 }
+
+const RANKS: Record<string, number> = { second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10, "2nd": 2, "3rd": 3, "4th": 4, "5th": 5, "6th": 6, "7th": 7, "8th": 8, "9th": 9, "10th": 10 };
+
+/** The enemy label the player named, as in "attack enemy 3". */
+export const enemyNumber = (text: string): number | null => {
+  const m = cleanTranscript(text).match(/\benemy (\d+)\b/i);
+  return m ? Number(m[1]) : null;
+};
+
+/** "the second one", "third enemy": a place in the line from the front. First and last are modes of their own. */
+export const ordinalOf = (text: string): number | null => {
+  const m = text.toLowerCase().match(new RegExp(`\\b(${Object.keys(RANKS).join("|")})\\s+(?:one|enemy|enemies|guy|monster|creep|unit)\\b`));
+  return m ? RANKS[m[1]] : null;
+};
 
 /** Fixes what speech recognition tends to get wrong here, then normalises spoken numbers. */
 export function cleanTranscript(text: string): string {
   return spokenNumbers(text.replace(/\b(cell|sale|sail|sel)\b(?=\s+(?:the\s+)?(?:tower|pad|slot|number|no\b|\d|one|two|three|four|five|six|seven|eight|nine|ten|alpha|alfa|bravo|charlie|charley|delta|echo|foxtrot|golf))/gi, "sell"));
+}
+
+const JOINERS = /\s*(?:[,;]|(?<=[.!?])\s|\band then\b|\bthen\b|\bafter that\b|\bafterwards\b|\band also\b|\balso\b|\band\b)\s*/i;
+export const MAX_CLAUSES = 4;
+
+/**
+ * Splits "go to Charlie and then build at Alpha" into separate commands. A piece without a verb of its own
+ * ("build at Alpha and Bravo") is kept with the clause before it, so lists are not torn apart.
+ */
+export function splitCommands(text: string): string[] {
+  const parts = text.split(JOINERS).map((p) => p.trim().replace(/[.!?]+$/, "")).filter(Boolean);
+  const out: string[] = [];
+  for (const part of parts) {
+    if (out.length && intents(part).length === 0) out[out.length - 1] += ` and ${part}`;
+    else out.push(part);
+  }
+  if (out.length > MAX_CLAUSES) return [...out.slice(0, MAX_CLAUSES - 1), out.slice(MAX_CLAUSES - 1).join(" and ")];
+  return out.length ? out : [text.trim()];
 }
 
 /** Does the transcript contain anything the game could act on: a verb, a pad, a number, a place or a game word? */

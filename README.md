@@ -19,14 +19,18 @@ Hold **Space** and speak, or use the **Hero** panel, click a pad on the map (bui
 | A specific tower | `build` / `upgrade` + a pad name or number | "build a tower at Bravo", "upgrade tower 3" |
 | A tower by goal | `defend` / `protect` + `base`, `spawn`, `left` / `right` / `top` / `bottom`, or `where the enemies are` | "defend the base", "build near the spawn to stop them early" |
 | The game to choose | `more defense`, `stronger`, `reinforce` with no place | "we need more defense" |
-| Sell a tower | `sell` / `scrap` / `demolish` / `destroy` + a pad or number | "sell tower 3" |
+| Sell or remove a tower | `sell` / `remove` / `delete` / `scrap` / `demolish` / `destroy` + a pad or number | "sell tower 3", "delete tower 2" |
 | Move the hero | `go to` / `retreat` + a pad, `base` or `spawn`; `go left` / `right` / `up` / `down` | "go to Charlie", "go left" |
 | Patrol | `patrol` | "patrol the path" |
-| Focus fire | `attack` + `nearest` / `strongest` / `weakest` / `first` | "attack the strongest one" |
+| Focus fire | `attack` + `nearest` / `strongest` / `weakest` / `first` / `last`, an enemy number, or its place in line | "attack the strongest one", "attack enemy 3", "attack the last one", "attack the second one" |
 | Stop | `stop` / `hold` | "stop, hold position" |
 | Fix a mistake | `undo` / `revert` / `take that back` | "undo that" |
 | Again | `again` / `repeat` | "do that again" |
 | The game | `pause`, `resume`, `speed up`, `next wave` | "pause the game", "call the next wave" |
+
+**Several commands in one sentence.** "Go to Charlie and then build a tower there" is split at *and*, *then*, commas and sentence ends. The first command runs; the next one is only worked out after the first has finished (a walk ends on arrival, an endless order such as an attack mode or a patrol yields after three seconds), so it sees the game as it is by then. If a command is not understood or needs confirming, the rest of the queue is dropped. A piece without a verb ("build at Alpha and Bravo") stays with the command before it. Any new command or button press clears the queue.
+
+Enemies carry a number (1, 2, 3 in spawn order within a wave) on the map; "enemy 3" and a click on an enemy mean the same thing. "First" is the enemy furthest along the path, "last" the one at the back, "second" the second from the front.
 
 **Undo** takes back the most recent change, one step at a time: an order the hero is still carrying out is cancelled, and a finished build, upgrade or sale is reverted (a build or upgrade is fully refunded; a sold tower comes back if you can cover the refund again). **Stop** only cancels what the hero is doing.
 
@@ -101,6 +105,10 @@ npm run deploy      # runs the tests, builds, and publishes dist/ to the gh-page
 
 GitHub Pages serves the `gh-pages` branch. Pages cannot send COOP/COEP headers, so wasm runs single-threaded there; the WebGPU path is unaffected.
 
+## Design
+
+The UI follows Wix Design System conventions: Wix Madefor type (self-hosted, no font requests to third parties), the WDS blue and neutral palette behind named tokens, 6px spacing steps, 8px cards, pill buttons, and light and dark themes. Loading uses skeleton placeholders instead of spinners: each model is a skeleton track that fills as it downloads, and the command panel shows skeleton lines while a command is being worked out (only if it takes noticeably long). Skeletons stay still for people who prefer reduced motion.
+
 ## Credits and licenses
 
 Code: MIT. Models are fetched from the Hugging Face Hub at runtime and are not part of this repository:
@@ -108,3 +116,4 @@ Code: MIT. Models are fetched from the Hugging Face Hub at runtime and are not p
 - Whisper small.en: MIT, OpenAI. ONNX conversion by [onnx-community](https://huggingface.co/onnx-community/whisper-small.en).
 - Tev1 0.8B: by Together AI on Qwen3.5-0.8B (Apache-2.0). The fine-tune's own license is still being finalised upstream; check [the model card](https://huggingface.co/togethercomputer/Tev1-0.8B-experimental) before redistributing. ONNX export by [goldenfox](https://huggingface.co/goldenfox/tev1-0.8b-decision-onnx).
 - Kokoro-82M (Apache-2.0) is used only to record the test fixtures.
+- Wix Madefor Text and Display: SIL Open Font License 1.1, Wix.com, via Google Fonts (Latin subsets, self-hosted in `public/fonts/`).

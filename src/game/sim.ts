@@ -1,8 +1,9 @@
 import { GameMap, Vec, pathLength, pointAt } from "./map";
-import { Command, describeCommand, FocusMode, META, Place } from "./commands";
+import { Command, describeCommand, FocusMode, META, ordinal, Place } from "./commands";
 import { mulberry32, Rng } from "./rng";
 
-export interface Enemy { id: number; kind: "grunt" | "fast" | "tank"; d: number; hp: number; maxHp: number; speed: number; reward: number }
+/** num is the label drawn on the enemy: 1, 2, 3 in spawn order within a wave. */
+export interface Enemy { id: number; num: number; kind: "grunt" | "fast" | "tank"; d: number; hp: number; maxHp: number; speed: number; reward: number }
 /** A tower's id is the number of the pad slot it stands on, so "tower 3" and pad 3 are the same thing. */
 export interface Tower { id: number; pad: string; pos: Vec; level: number; cd: number; spent: number }
 export interface Beam { from: Vec; to: Vec; ttl: number; hero: boolean }
@@ -10,7 +11,7 @@ export type Order =
   | { type: "idle" }
   | { type: "move"; to: Vec; label: string; then?: Command }
   | { type: "patrol"; leg: 0 | 1 }
-  | { type: "attack"; mode: FocusMode; target?: number };
+  | { type: "attack"; mode: FocusMode; n?: number; target?: number };
 
 /** How to take back one change. Pushed when it happens, popped by undo. */
 type Undo =
@@ -61,6 +62,7 @@ export class Game {
   last: Command | null = null;
   private history: Undo[] = [];
   private nextId = 1;
+  private nextNum = 1;
   private spawnQueue: { at: number; kind: Enemy["kind"] }[] = [];
   private waveTimer = 4;
 
@@ -98,7 +100,11 @@ export class Game {
   /** Checks a command against the current state without changing anything. Null means it can go ahead. */
   refusal(c: Command): string | null {
     switch (c.kind) {
-      case "attack": return this.enemies.length ? null : "There are no enemies to attack.";
+      case "attack":
+        if (!this.enemies.length) return "There are no enemies to attack.";
+        if (c.mode === "number" && !this.pick("number", c.n)) return `There is no enemy ${c.n} on the field.`;
+        if (c.mode === "rank" && !this.pick("rank", c.n)) return `There are only ${this.enemies.length} enemies on the field.`;
+        return null;
       case "build": {
         const pad = this.padByName(c.pad);
         if (!pad) return "No such pad.";
@@ -146,8 +152,8 @@ export class Game {
         this.order({ type: "idle" }, "hold position");
         return ok("Holding position.");
       case "attack":
-        this.order({ type: "attack", mode: c.mode }, `attack ${c.mode}`);
-        return ok(`Attacking the ${c.mode} enemy.`);
+        this.order({ type: "attack", mode: c.mode, n: c.n }, describeCommand(c));
+        return ok(c.mode === "number" ? `Attacking enemy ${c.n}.` : c.mode === "rank" ? `Attacking the ${ordinal(c.n!)} enemy.` : `Attacking the ${c.mode} enemy.`);
       case "patrol":
         this.order({ type: "patrol", leg: 1 }, "patrol");
         return ok("Patrolling the path.");
@@ -261,6 +267,7 @@ export class Game {
 
   private planWave() {
     this.wave++;
+    this.nextNum = 1 + Math.max(0, ...this.enemies.map((e) => e.num));
     const n = 4 + this.wave * 2;
     for (let i = 0; i < n; i++) {
       const roll = this.rng();
@@ -274,18 +281,21 @@ export class Game {
     const scale = 1 + (this.wave - 1) * 0.18;
     const base = { grunt: [30, 1.0, 6], fast: [18, 1.8, 7], tank: [110, 0.6, 14] }[kind];
     const hp = Math.round(base[0] * scale);
-    this.enemies.push({ id: this.nextId++, kind, d: 0, hp, maxHp: hp, speed: base[1], reward: base[2] });
+    this.enemies.push({ id: this.nextId++, num: this.nextNum++, kind, d: 0, hp, maxHp: hp, speed: base[1], reward: base[2] });
   }
 
-  pick(mode: FocusMode): Enemy | undefined {
+  pick(mode: FocusMode, n?: number): Enemy | undefined {
     const live = this.enemies;
     if (!live.length) return undefined;
     const by = (f: (e: Enemy) => number) => live.reduce((a, b) => (f(b) < f(a) ? b : a));
     switch (mode) {
       case "first": return by((e) => -e.d);
+      case "last": return by((e) => e.d);
       case "strongest": return by((e) => -e.hp);
       case "weakest": return by((e) => e.hp);
       case "nearest": return by((e) => dist(this.hero.pos, this.enemyPos(e)));
+      case "number": return live.find((e) => e.num === n);
+      case "rank": return [...live].sort((a, b) => b.d - a.d)[(n ?? 1) - 1];
     }
   }
 
@@ -331,8 +341,10 @@ export class Game {
     const o = h.order;
     let focus: Enemy | undefined;
     if (o.type === "attack") {
-      focus = this.enemies.find((e) => e.id === o.target) ?? this.pick(o.mode);
-      o.target = focus?.id;
+      focus = this.enemies.find((e) => e.id === o.target);
+      if (!focus && (o.mode === "number" || o.mode === "rank") && o.target !== undefined) h.order = { type: "idle" };
+      else if (!focus) focus = this.pick(o.mode, o.n);
+      o.target = focus?.id ?? o.target;
       if (focus) {
         const p = this.enemyPos(focus);
         if (dist(h.pos, p) > HERO.range * 0.9) this.walk(p, dt);
@@ -411,7 +423,7 @@ export class Game {
       });
       out.push({
         command: { kind: "sell", pad: s.name },
-        label: `sell tower ${t.id} at pad ${s.name}, level ${s.level}, for ${this.sellValue(t)} gold (${where})`,
+        label: `sell (remove, delete) tower ${t.id} at pad ${s.name}, level ${s.level}, for ${this.sellValue(t)} gold (${where})`,
         score: -1,
         affordable: true,
         stats: s,
@@ -481,7 +493,7 @@ export class Game {
   orderText(): string {
     const o = this.hero.order;
     if (o.type === "idle") return "idle";
-    if (o.type === "attack") return `attacking ${o.mode}`;
+    if (o.type === "attack") return o.mode === "number" ? `attacking enemy ${o.n}` : o.mode === "rank" ? `attacking the ${ordinal(o.n!)} enemy` : `attacking ${o.mode}`;
     if (o.type === "patrol") return "patrolling";
     return `moving to ${o.label}${o.then ? ` to ${o.then.kind}` : ""}`;
   }
