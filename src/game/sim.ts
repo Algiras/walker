@@ -56,6 +56,7 @@ export class Game {
   baseHp = 20;
   wave = 0;
   time = 0;
+  /** Everything the game has said, oldest first. The page shows it by index, so entries are never dropped. */
   log: string[] = [];
   state: "playing" | "lost" = "playing";
   paused = false;
@@ -91,7 +92,7 @@ export class Game {
   sellValue(t: Tower) { return Math.floor(t.spent * COSTS.refund); }
   padByName(name: string) { return this.map.pads.find((p) => p.name.toLowerCase() === name.toLowerCase()); }
 
-  say(msg: string) { this.log.push(msg); if (this.log.length > 50) this.log.shift(); }
+  say(msg: string) { this.log.push(msg); }
 
   resolve(p: Place): { pos: Vec; label: string } | undefined {
     if (p.type === "point") return { pos: { x: p.x, y: p.y }, label: "that spot" };
@@ -103,6 +104,7 @@ export class Game {
 
   /** Checks a command against the current state without changing anything. Null means it can go ahead. */
   refusal(c: Command): string | null {
+    if (this.state === "lost") return "The base has fallen.";
     switch (c.kind) {
       case "attack":
         if (!this.enemies.length) return "There are no enemies to attack.";
@@ -123,6 +125,7 @@ export class Game {
         return this.gold < cost ? `Not enough gold: upgrading costs ${cost}, you have ${this.gold}.` : null;
       }
       case "sell": return this.towerAt(c.pad) ? null : `There is no tower at ${c.pad} to sell.`;
+      case "move": return this.resolve(c.to) ? null : "No such place.";
       case "nextwave": return this.spawnQueue.length ? "The current wave is still arriving." : null;
       case "pause": return this.paused ? "Already paused." : null;
       case "resume": return this.paused ? null : "Not paused.";
@@ -133,8 +136,7 @@ export class Game {
   }
 
   private order(o: Order, what: string) {
-    this.history.push({ type: "order", previous: this.hero.order, what });
-    if (this.history.length > HISTORY) this.history.shift();
+    this.remember({ type: "order", previous: this.hero.order, what });
     this.hero.order = o;
   }
 
@@ -167,8 +169,7 @@ export class Game {
         return ok(`Moving ${c.dir}.`);
       }
       case "move": {
-        const t = this.resolve(c.to);
-        if (!t) return { ok: false, message: "No such place." };
+        const t = this.resolve(c.to)!;
         this.order({ type: "move", to: t.pos, label: t.label }, `move to ${t.label}`);
         return ok(`Moving to ${t.label}.`);
       }
@@ -308,6 +309,7 @@ export class Game {
   }
 
   step(dt: number) {
+    this.hero.shake = Math.max(0, this.hero.shake - dt);
     if (this.state !== "playing" || this.paused) return;
     this.time += dt;
 
@@ -342,7 +344,6 @@ export class Game {
       }
     }
 
-    this.hero.shake = Math.max(0, this.hero.shake - dt);
     this.stepHero(dt);
     this.beams = this.beams.filter((b) => (b.ttl -= dt) > 0);
   }
@@ -394,7 +395,10 @@ export class Game {
     const to = this.enemyPos(e);
     this.beams.push({ from: { ...from }, to, ttl: 0.12, hero });
     e.hp -= dmg;
-    if (e.hp <= 0) this.gold += e.reward;
+    if (e.hp > 0) return;
+    // Gone at once, so a second shooter in the same step cannot hit it again and be paid for it twice.
+    this.gold += e.reward;
+    this.enemies = this.enemies.filter((x) => x !== e);
   }
 
   /** How well a pad covers the path: tiles of path within range, where along the path that is, and enemies in range now. */
@@ -447,12 +451,12 @@ export class Game {
   /** The game's own pick for "you choose", steered by whatever area or goal the player hinted at. It never sells. */
   bestCandidate(hint: Hint = {}): Candidate | undefined {
     let pool = this.candidates().filter((c) => c.command.kind !== "sell" && c.score >= 0);
-    const ok = pool.filter((c) => c.affordable);
-    if (ok.length) pool = ok;
     if (hint.prefer) {
       const kind = pool.filter((c) => c.command.kind === hint.prefer);
       if (kind.length) pool = kind;
     }
+    const ok = pool.filter((c) => c.affordable);
+    if (ok.length) pool = ok;
     if (hint.area) {
       const inArea = pool.filter((c) => c.stats.where.includes(hint.area!));
       if (inArea.length) pool = inArea;
@@ -465,19 +469,21 @@ export class Game {
   /** Is this a sensible thing to do right now? Advice only; the player decides. */
   assess(c: Command): Assessment | null {
     const stats = this.padStats();
-    const of = (pad: string) => stats.find((s) => s.name === pad)!;
+    const of = (pad: string) => stats.find((s) => s.name === pad);
     if (c.kind === "build") {
       const s = of(c.pad);
+      if (!s || this.towerAt(c.pad)) return null;
       const best = Math.max(...stats.filter((x) => x.level === 0).map((x) => x.coverage));
       if (s.threat > 0) return { verdict: "good", note: `${s.threat} enemies are in range of ${c.pad} right now.` };
       if (s.coverage < 0.5 * best) return { verdict: "poor", note: `${c.pad} covers only ${s.coverage.toFixed(1)} tiles of path; the best free pad covers ${best.toFixed(1)}.` };
       return { verdict: "ok", note: `${c.pad} covers ${s.coverage.toFixed(1)} tiles of path.` };
     }
     if (c.kind === "upgrade") {
-      const s = of(c.pad);
-      const busiest = Math.max(...stats.map((x) => x.threat));
-      if (s.threat > 0) return { verdict: "good", note: `Tower ${this.towerAt(c.pad)!.id} is shooting at ${s.threat} enemies right now.` };
-      if (busiest > 0) return { verdict: "poor", note: `Tower ${this.towerAt(c.pad)!.id} sees no enemies while another tower sees ${busiest}.` };
+      const s = of(c.pad), t = this.towerAt(c.pad);
+      if (!s || !t) return null;
+      const busiest = Math.max(0, ...stats.filter((x) => x.level > 0).map((x) => x.threat));
+      if (s.threat > 0) return { verdict: "good", note: `Tower ${t.id} is shooting at ${s.threat} enemies right now.` };
+      if (busiest > 0) return { verdict: "poor", note: `Tower ${t.id} sees no enemies while another tower sees ${busiest}.` };
       return { verdict: "ok", note: "No enemies yet, so this is an investment." };
     }
     if (c.kind === "nextwave") {
@@ -486,11 +492,12 @@ export class Game {
       return { verdict: "good", note: "The field is clear, so calling early earns bonus gold." };
     }
     if (c.kind === "sell") {
-      const s = of(c.pad);
+      const s = of(c.pad), t = this.towerAt(c.pad);
+      if (!s || !t) return null;
       if (this.towers.length === 1 && this.enemies.length) return { verdict: "poor", note: "That is your only tower and enemies are on the field." };
-      if (s.threat > 0) return { verdict: "poor", note: `Tower ${this.towerAt(c.pad)!.id} is shooting at ${s.threat} enemies right now.` };
+      if (s.threat > 0) return { verdict: "poor", note: `Tower ${t.id} is shooting at ${s.threat} enemies right now.` };
       if (s.coverage < 3) return { verdict: "good", note: `It covers only ${s.coverage.toFixed(1)} tiles of path, so the gold is better spent elsewhere.` };
-      return { verdict: "ok", note: `You get back ${this.sellValue(this.towerAt(c.pad)!)} gold, 60% of what it cost.` };
+      return { verdict: "ok", note: `You get back ${this.sellValue(t)} gold, 60% of what it cost.` };
     }
     return null;
   }

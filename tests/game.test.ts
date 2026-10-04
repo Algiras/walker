@@ -68,6 +68,18 @@ describe("candidates", () => {
     if (left) expect(left.stats.where).toContain("left");
   });
 
+  it("follows the build or upgrade word even when only the other kind is affordable", () => {
+    const g = new Game(generateMap(7));
+    g.addTower(g.map.pads[1].name);
+    g.gold = 45;
+    expect(g.bestCandidate({ prefer: "build" })?.command.kind).toBe("build");
+    const h = new Game(generateMap(7));
+    h.addTower(h.map.pads[1].name, 2);
+    h.gold = 60;
+    expect(h.bestCandidate({ prefer: "upgrade" })?.command.kind).toBe("upgrade");
+    expect(h.bestCandidate()?.command.kind).toBe("build");
+  });
+
   it("summarises the game for the prompt", () => {
     expect(new Game(generateMap(7)).summary()).toMatch(/Gold 100.*Base health 20/);
   });
@@ -261,6 +273,153 @@ describe("simulation", () => {
     const g = new Game(generateMap(3));
     for (let i = 0; i < 30 * 600 && g.state === "playing"; i++) g.step(1 / 30);
     expect(g.state).toBe("lost");
+  });
+});
+
+describe("kills, log and advice", () => {
+  const enemy = (d: number, hp = 1) => ({ id: 99, num: 1, kind: "grunt" as const, d, hp, maxHp: hp, speed: 0, reward: 6 });
+  /** A spot on the path that two different pads can both shoot at. */
+  const sharedSpot = (g: Game) => {
+    for (let d = 0; d < g.total; d += 0.05) {
+      g.enemies = [enemy(d)];
+      const hot = g.padStats().filter((s) => s.threat > 0);
+      if (hot.length >= 2) { g.enemies = []; return { d, pads: [hot[0].name, hot[1].name] }; }
+    }
+    throw new Error("no shared spot");
+  };
+
+  it("pays for a kill once and removes the enemy at once, however many shooters are in range", () => {
+    const g = new Game(generateMap(7));
+    const { d, pads } = sharedSpot(g);
+    for (const p of pads) g.addTower(p);
+    g.enemies = [enemy(d)];
+    const before = g.gold;
+    g.step(1 / 30);
+    expect(g.gold - before).toBe(6);
+    expect(g.enemies).toHaveLength(0);
+  });
+
+  it("keeps every message, so the page can follow the log by position", () => {
+    const g = new Game(generateMap(7));
+    for (let i = 0; i < 80; i++) g.say(`message ${i}`);
+    expect(g.log).toHaveLength(80);
+    expect(g.log[79]).toBe("message 79");
+  });
+
+  it("gives no advice about a tower that is not there, and does not crash", () => {
+    const g = new Game(generateMap(7));
+    const pad = g.map.pads[0].name;
+    expect(g.assess({ kind: "sell", pad })).toBeNull();
+    expect(g.assess({ kind: "upgrade", pad })).toBeNull();
+    g.addTower(pad);
+    expect(g.assess({ kind: "build", pad })).toBeNull();
+  });
+
+  it("only counts towers when it says another tower sees enemies", () => {
+    const g = new Game(generateMap(7));
+    const [mine, empty] = [g.map.pads[0].name, g.map.pads[1].name];
+    g.addTower(mine);
+    for (let d = 0; d < g.total; d += 0.05) {
+      g.enemies = [enemy(d)];
+      const stat = (name: string) => g.padStats().find((s) => s.name === name)!;
+      if (stat(empty).threat > 0 && stat(mine).threat === 0) {
+        expect(g.assess({ kind: "upgrade", pad: mine })?.verdict).toBe("ok");
+        return;
+      }
+    }
+    throw new Error("no spot only the empty pad covers");
+  });
+
+  it("refuses everything once the base has fallen", () => {
+    const g = new Game(generateMap(3));
+    for (let i = 0; i < 30 * 600 && g.state === "playing"; i++) g.step(1 / 30);
+    expect(g.state).toBe("lost");
+    const wave = g.wave;
+    expect(g.command({ kind: "nextwave" })).toEqual({ ok: false, message: "The base has fallen." });
+    expect(g.wave).toBe(wave);
+  });
+
+  it("lets a refusal's shake die down even while paused", () => {
+    const g = new Game(generateMap(7));
+    g.command({ kind: "pause" });
+    g.command({ kind: "pause" });
+    expect(g.hero.shake).toBeGreaterThan(0);
+    for (let i = 0; i < 30; i++) g.step(1 / 30);
+    expect(g.hero.shake).toBe(0);
+  });
+
+  it("refuses a walk to a place that does not exist without remembering it as the last command", () => {
+    const g = new Game(generateMap(7));
+    const out = g.command({ kind: "move", to: { type: "pad", name: "Nowhere" } });
+    expect(out.ok).toBe(false);
+    expect(g.last).toBeNull();
+    expect(g.hero.shake).toBeGreaterThan(0);
+  });
+});
+
+describe("orders, waves and targets", () => {
+  const world = () => new Game(generateMap(7));
+  const enemy = (id: number, d: number, hp: number) => ({ id, num: id, kind: "grunt" as const, d, hp, maxHp: 100, speed: 0, reward: 1 });
+
+  it("checks again on arrival and does not build what can no longer be paid for", () => {
+    const g = world();
+    const pad = g.map.pads[0];
+    g.hero.pos = { x: pad.pos.x + 0.4, y: pad.pos.y };
+    g.command({ kind: "build", pad: pad.name });
+    g.gold = 10;
+    for (let i = 0; i < 30 && g.hero.order.type !== "idle"; i++) g.step(1 / 30);
+    expect(g.towerAt(pad.name)).toBeUndefined();
+    expect(g.gold).toBe(10);
+    expect(g.log[g.log.length - 1]).toMatch(/Not enough gold/);
+  });
+
+  it("undoes a build first and the order it interrupted second", () => {
+    const g = world();
+    const pad = g.map.pads[0].name;
+    g.command({ kind: "patrol" });
+    g.command({ kind: "build", pad });
+    for (let i = 0; i < 30 * 40 && !g.towerAt(pad); i++) g.step(1 / 30);
+    expect(g.undo().message).toMatch(/Reverted/);
+    expect(g.hero.order.type).toBe("idle");
+    expect(g.undo().message).toMatch(/Cancelled: build/);
+    expect(g.hero.order.type).toBe("patrol");
+  });
+
+  it("pays the early-call bonus for the countdown that is left", () => {
+    const g = world();
+    expect(g.command({ kind: "nextwave" }).message).toMatch(/\+12 gold/);
+    expect(g.gold).toBe(112);
+  });
+
+  it("carries enemy numbers on from the highest still on the field when waves overlap", () => {
+    const g = world();
+    g.command({ kind: "nextwave" });
+    for (let i = 0; i < 30 * 8; i++) g.step(1 / 30);
+    const first = g.enemies.length;
+    expect(g.command({ kind: "nextwave" }).ok).toBe(true);
+    for (let i = 0; i < 30 * 12; i++) g.step(1 / 30);
+    const nums = g.enemies.map((e) => e.num);
+    expect(new Set(nums).size).toBe(nums.length);
+    expect(Math.max(...nums)).toBeGreaterThan(first);
+  });
+
+  it("picks the strongest, the weakest and the nearest", () => {
+    const g = world();
+    g.enemies = [enemy(1, 5, 30), enemy(2, 12, 10), enemy(3, 20, 50)];
+    expect(g.pick("strongest")?.id).toBe(3);
+    expect(g.pick("weakest")?.id).toBe(2);
+    g.hero.pos = { ...g.enemyPos(g.enemies[1]) };
+    expect(g.pick("nearest")?.id).toBe(2);
+  });
+
+  it("ends a numbered attack when its target dies instead of moving on to another enemy", () => {
+    const g = world();
+    g.enemies = [enemy(1, g.total - 1.2, 100), enemy(2, g.total - 1, 1)];
+    g.command({ kind: "attack", mode: "number", n: 2 });
+    g.step(1 / 30);
+    expect(g.enemies.map((e) => e.num)).toEqual([1]);
+    g.step(1 / 30);
+    expect(g.hero.order.type).toBe("idle");
   });
 });
 
