@@ -103,6 +103,7 @@ export function gateOptions(options: Option[], text: string): Option[] {
     out = out.filter((o) => {
       const v = o.value && o.value !== "auto" ? o.value : null;
       if (v?.kind === "move" && v.to.type !== "pad") return false;
+      if (v?.kind === "nudge" || v?.kind === "patrol") return false;
       const p = padOf(o);
       return p === null || focus.has(p);
     });

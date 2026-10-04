@@ -179,6 +179,8 @@ $("load").addEventListener("click", async () => {
     } catch {
       status("Models ready, but the microphone is unavailable. You can still type commands.");
     }
+    $("bars").hidden = true;
+    btn.textContent = "Voice models loaded";
   } catch (e) {
     status(`Failed: ${(e as Error).message}`);
     btn.disabled = false;
@@ -279,6 +281,8 @@ const fit = () => {
   const w = stacked ? board.clientWidth : Math.min(board.clientWidth, board.clientHeight * aspect);
   canvas.style.width = `${Math.floor(w)}px`;
   canvas.style.height = `${Math.floor(w / aspect)}px`;
+  $("banner").style.width = canvas.style.width;
+  $("banner").style.height = canvas.style.height;
 };
 new ResizeObserver(fit).observe(board);
 const wide = matchMedia("(min-width: 901px)");

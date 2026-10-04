@@ -175,6 +175,12 @@ describe("option gate details", () => {
     expect(all.length).toBeGreaterThan(24);
     for (const t of ["", "Charlie", "hello there", "go build"]) expect(gateOptions(all, t).length).toBeLessThanOrEqual(24);
   });
+  it("leaves only that pad's own move for go-to, with no patrol or nudges", () => {
+    const h = new Game(generateMap(7));
+    h.hero.pos = { x: 9, y: 5.5 };
+    expect(gateOptions(actionOptions(h), "go to Charlie").map((o) => o.key)).toEqual(["move_charlie"]);
+    expect(gateOptions(actionOptions(h), "go to pad 3").map((o) => o.key)).toEqual(["move_charlie"]);
+  });
   it("narrows to the pad that was named or numbered", () => {
     expect([...pads("sell Charlie")]).toEqual(["Charlie"]);
     expect([...pads("upgrade tower 2")]).toEqual(["Bravo"]);
