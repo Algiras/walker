@@ -1,6 +1,6 @@
 import { generateMap } from "./game/map";
 import { Game, Order } from "./game/sim";
-import { render } from "./game/render";
+import { render, sizeCanvas } from "./game/render";
 import { Command, describeCommand } from "./game/commands";
 import { Mic } from "./voice/mic";
 import { loadStt, Stt, sttCached } from "./voice/stt";
@@ -547,6 +547,8 @@ const fit = () => {
     el.style.width = `${Math.floor(w)}px`;
     el.style.height = `${h}px`;
   }
+  sizeCanvas(canvas);
+  render(ctx, game);
 };
 new ResizeObserver(fit).observe(stage);
 const wide = matchMedia("(min-width: 901px)");
