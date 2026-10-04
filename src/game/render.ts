@@ -144,7 +144,7 @@ function badge(ctx: CanvasRenderingContext2D, x: number, y: number, n: number, f
   ctx.strokeStyle = "#3b4a6b";
   ctx.lineWidth = 2;
   ctx.stroke();
-  ctx.fillStyle = "#1b1f2a";
+  ctx.fillStyle = C.text;
   ctx.font = `bold ${13 * ui}px system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.fillText(String(n), x, y + 4.5 * ui);
